@@ -9,6 +9,7 @@ import { convertPostgresSchema } from './targets/postgres';
 import { convertRedshiftSchema } from './targets/redshift';
 import { convertSnowflakeSchema } from './targets/snowflake';
 import { convertTrinoSchema } from './targets/trino';
+import { convertStarrocksSchema } from './targets/starrocks';
 import { renderProfilesYml } from './templating';
 import { LoadProfileArgs, Profiles, Target } from './types';
 
@@ -62,6 +63,8 @@ export const warehouseCredentialsFromDbtTarget = async (
             return convertRedshiftSchema(target);
         case 'databricks':
             return convertDatabricksSchema(target);
+        case 'starrocks':
+            return convertStarrocksSchema(target);
         case 'trino':
             return convertTrinoSchema(target);
         default:
