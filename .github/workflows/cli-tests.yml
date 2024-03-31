@@ -6,7 +6,7 @@ env:
 
 jobs:
   files-changed:
-    if: github.ref != 'refs/heads/main'
+    if: github.ref != 'refs/heads/starrocks-client'
     name: Detect what files changed
     runs-on: ubuntu-latest
     # Map a step output to a job output
