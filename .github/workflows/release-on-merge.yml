@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - alpha
+      - starrocks-client
 
 jobs:
   release:
