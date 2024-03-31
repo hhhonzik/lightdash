@@ -1,0 +1,47 @@
+version: 2
+
+seeds:
+  - name: raw_events
+    config:
+      column_types:
+        timestamp: "datetime"
+        timestamp_tz: "{{ 'timestamp_tz' if target.type == 'snowflake' else 'datetime' }}"
+        timestamp_ltz: "{{ 'timestamp_ltz' if target.type == 'snowflake' else 'datetime' }}"
+        timestamp_ntz: "{{ 'timestamp_ntz' if target.type == 'snowflake' else 'datetime' }}"
+  - name: raw_generated
+    config:
+      column_types:
+        autoincrement2: integer
+        float: float
+        currency: varchar
+        date: date
+        date1: date
+        date2: date
+        date3: date
+        date4: date
+        date5: date
+        date6: date
+        date7: date
+        date8: date
+        date9: date
+        date10: date
+        date11: date
+        foreign_key: integer
+        numberrange: varchar
+        numberrange1: varchar
+        numberrange2: varchar
+        numberrange3: varchar
+        numberrange4: varchar
+        numberrange5: integer
+        numberrange6: integer
+        numberrange7: integer
+        numberrange8: integer
+        numberrange9: integer
+        numberrange10: integer
+        numberrange11: integer
+        numberrange12: integer
+        numberrange13: integer
+        numberrange14: integer
+        numberrange15: integer
+        primary_key: integer
+        time: datetime

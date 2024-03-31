@@ -34,7 +34,6 @@ RUN python3 -m venv /usr/local/dbt1.4 \
     "dbt-bigquery~=1.4.0" \
     "dbt-databricks~=1.4.0" \
     "dbt-trino~=1.4.0" \
-    "dbt-starrocks~=1.4.2" \
     "psycopg2-binary==2.9.6"
 
 RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt\
