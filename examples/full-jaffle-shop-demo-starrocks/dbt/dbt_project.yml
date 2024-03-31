@@ -26,10 +26,7 @@ seeds:
   jaffle_shop_starrocks:
     raw_customers:
       +column_types:
-        created: timestamp
+        created: datetime
     raw_plan:
       +column_types:
-        metadata: jsonb
-    raw_tracks:
-      +column_types:
-        timestamp: timestamp
+        metadata: json

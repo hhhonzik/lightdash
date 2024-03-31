@@ -1,33 +1,58 @@
-
 {
 	"name": "Lightdash",
 	"dockerComposeFile": "../docker/docker-compose.dev.yml",
 	"service": "lightdash-dev",
 	"workspaceFolder": "/usr/app",
 	"shutdownAction": "stopCompose",
-	"postCreateCommand": "git submodule update --init && ./docker/scripts/build.sh && ./docker/scripts/seed-jaffle.sh",
-	"forwardPorts": [3000, 8080],
+	"postCreateCommand": "git submodule update --init && ./scripts/build.sh && ./scripts/seed-jaffle.sh && alias lightdash=packages/cli/dist/index.js",
+	"forwardPorts": [
+		3000,
+		8080
+	],
 	"remoteEnv": {
-	  "LIGHTDASH_CONFIG_FILE": "/usr/app/lightdash.yml",
-	  "DBT_DEMO_DIR": "/usr/app/examples/full-jaffle-shop-demo",
-	  "HEADLESS_BROWSER_HOST": "headless-browser",
-	  "HEADLESS_BROWSER_PORT": "3000"
+		"LIGHTDASH_CONFIG_FILE": "/usr/app/lightdash.yml",
+		"DBT_DEMO_DIR": "/usr/app/examples/full-jaffle-shop-demo",
+		"PGHOST": "db-dev",
+		"PGPORT": "5432",
+		"PGUSER": "postgres",
+		"PGPASSWORD": "password",
+		"PGDATABASE": "postgres",
+		"SECURE_COOKIES": "false",
+		"TRUST_PROXY": "false",
+		"LIGHTDASH_SECRET": "'not very secret'",
+		"RUDDERSTACK_WRITE_KEY": "1vikeGadtB0Y0oRDFNL2Prdhkbp",
+		"RUDDERSTACK_DATA_PLANE_URL": "https: //analytics.lightdash.com",
+		"NODE_ENV": "development",
+		"LIGHTDASH_LOG_LEVEL": "debug",
+		"LIGHTDASH_QUERY_MAX_LIMIT": "5000",
+		"AUTH_GOOGLE_OAUTH2_CLIENT_ID": "",
+		"AUTH_GOOGLE_OAUTH2_CLIENT_SECRET": "",
+		"AUTH_DISABLE_PASSWORD_AUTHENTICATION": "false",
+		"EXTENDED_USAGE_ANALYTICS": "true",
+		"OTEL_TRACES_EXPORTER": "otlp",
+		"OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http: //jaeger:4318",
+		"OTEL_SDK_DISABLED": "false",
+		"HEADLESS_BROWSER_PORT": "3000"
 	},
-	"extensions": ["mtxr.sqltools", "mtxr.sqltools-driver-pg"],
+	"extensions": [
+		"mtxr.sqltools",
+		"mtxr.sqltools-driver-pg"
+	],
 	"settings": {
-	  "git.autofetch": true,
-	  "sqltools.autoConnectTo": "Lightdash db",
-	  "sqltools.connections": [
-		{
-		  "name": "Lightdash db",
-		  "driver": "PostgreSQL",
-		  "previewLimit": 50,
-		  "server": "db-dev",
-		  "port": 5432,
-		  "database": "postgres",
-		  "username": "postgres",
-		  "password": "password"
-		}
-	  ]
+		"git.autofetch": true,
+		"sqltools.autoConnectTo": "Lightdash db",
+		"sqltools.connections": [
+			{
+				"name": "Lightdash db",
+				"driver": "PostgreSQL",
+				"previewLimit": 50,
+				"server": "db-dev",
+				"port": 5432,
+				"database": "postgres",
+				"username": "postgres",
+				"password": "password"
+			}
+		]
 	}
-  }
+}

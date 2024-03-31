@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  dbt:
+    image: fishtownanalytics/dbt:0.21.0
+    depends_on:
+      - starrocks
+    volumes:
+      - "..:/usr/app"
+    entrypoint: /usr/app/docker/entrypoint.sh
+  starrocks:
+    image: starrocks/allin1-ubuntu
+    restart: always
+    ports:
+      - "9030:9030"
+      - "8030:8030"
+      - "8040:8040"

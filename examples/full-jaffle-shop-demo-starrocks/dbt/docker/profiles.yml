@@ -1,0 +1,14 @@
+config:
+  send_anonymous_usage_stats: false
+
+jaffle_shop:
+  outputs:
+    default:
+      type: starrocks
+      host: host.docker.internal
+      port: 9030
+      schema: analytics
+      # User/password auth
+      username: root
+      password:
+      version: 3.1.0 # fix a bug with versions
