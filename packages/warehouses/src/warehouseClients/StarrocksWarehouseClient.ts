@@ -87,7 +87,7 @@ const catalogToSchema = (results: string[][][]): WarehouseCatalog => {
     //                 {};
     //             warehouseCatalog[table_catalog][table_schema][table_name][
     //                 column_name
-    //             ] = convertDataTypeToDimensionType(data_type);
+    //             ] = convertDataTypeToDimensionType(data_type as number);
     //         },
     //     );
     // });
@@ -127,17 +127,6 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
     private convertQueryResultFields(
         fields: FieldPacket[],
     ): Record<string, { type: DimensionType }> {
-        fields.forEach((field) => {
-            console.log('FIELD TYPE', field.type);
-            console.log('FIELD TYPE', field.columnType);
-            console.log('FIELD TYPE', field.typeName);
-        })
-        console.log(fields.reduce((agg, field) => ({
-            ...agg,
-            [field.name]: {
-                type: convertDataTypeToDimensionType(field.columnType)
-            }
-        }), {}))
         return fields.reduce((agg, field) => ({
             ...agg,
             [field.name]: {
@@ -179,7 +168,7 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
     }
 
     getFieldQuoteChar() {
-        return '"';
+        return '';
     }
 
     getStringQuoteChar() {
