@@ -121,7 +121,7 @@ export type TrinoCredentials = Omit<
 export type CreateStarrocksCredentials = {
     type: WarehouseTypes.STARROCKS;
     host: string;
-    username: string;
+    user: string;
     password?: string;
     requireUserCredentials?: boolean;
     port: number;
