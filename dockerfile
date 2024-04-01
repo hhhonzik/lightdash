@@ -161,7 +161,7 @@ COPY --from=prod-builder  /usr/local/dbt1.7 /usr/local/dbt1.7
 COPY --from=prod-builder  /usr/local/dbt1.8 /usr/local/dbt1.8
 COPY --from=prod-builder /usr/app /usr/app
 
-RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt \
+RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt1.4 \
     && ln -s /usr/local/dbt1.5/bin/dbt /usr/local/bin/dbt1.5 \
     && ln -s /usr/local/dbt1.6/bin/dbt /usr/local/bin/dbt1.6 \
     && ln -s /usr/local/dbt1.7/bin/dbt /usr/local/bin/dbt1.7 \
