@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY_IMAGE: lightdash/lightdash
+  REGISTRY_IMAGE: hhhonzik/lightdash
 
 jobs:
   # This job builds Docker images for various architectures in parallel
