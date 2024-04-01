@@ -1,8 +1,7 @@
 version: "3.8"
 services:
   lightdash:
-    image: lightdash/lightdash:latest
-    image: ghcr.io/hhhonzik/lightdash:latest
+    image: hhhonzik/lightdash:latest
     depends_on:
       - db
     environment:
