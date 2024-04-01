@@ -14,7 +14,7 @@ on:
 
 env:
   REGISTRY_IMAGE: hhhonzik/lightdash
-  REGISTRY: ghcr.io
+  REGISTRY: docker.io
 
 jobs:
   # This job builds Docker images for various architectures in parallel
@@ -55,8 +55,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push by digest
         id: build
