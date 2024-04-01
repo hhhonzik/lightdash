@@ -67,8 +67,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=${{ env.REGISTRY_IMAGE }}
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,mode=min,ref={0}', env.REGISTRY_IMAGE) || '' }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,mode=min,ref={0}/{1}', env.REGISTRY, env.REGISTRY_IMAGE) || '' }}
 
       - name: Export digest
         run: |
