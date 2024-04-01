@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsystemd0=252.22-1~deb12u1
 
 # Installing multiple versions of dbt
-# dbt 1.4 is the default
+# dbt 1.6 is the default
 RUN python3 -m venv /usr/local/dbt1.4 \
     && /usr/local/dbt1.4/bin/pip install \
     "dbt-postgres~=1.4.0" \
@@ -36,7 +36,7 @@ RUN python3 -m venv /usr/local/dbt1.4 \
     "dbt-trino~=1.4.0" \
     "psycopg2-binary==2.9.6"
 
-RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt\
+RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt1.4\
     && python3 -m venv /usr/local/dbt1.5 \
     && /usr/local/dbt1.5/bin/pip install \
     "dbt-postgres~=1.5.0" \
@@ -57,7 +57,7 @@ RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt\
     "dbt-starrocks~=1.4.2" \
     "dbt-trino==1.6.0" \
     "psycopg2-binary==2.9.6"\
-    && ln -s /usr/local/dbt1.6/bin/dbt /usr/local/bin/dbt1.6 \
+    && ln -s /usr/local/dbt1.6/bin/dbt /usr/local/bin/dbt \
     && python3 -m venv /usr/local/dbt1.7 \
     && /usr/local/dbt1.7/bin/pip install \
     "dbt-postgres~=1.7.0" \
