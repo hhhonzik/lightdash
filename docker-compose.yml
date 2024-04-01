@@ -1,8 +1,8 @@
 version: "3.8"
 services:
   lightdash:
-    platform: linux/amd64
     image: lightdash/lightdash:latest
+    image: ghcr.io/hhhonzik/lightdash:latest
     depends_on:
       - db
     environment:
