@@ -108,6 +108,7 @@ COPY packages/common/package.json ./packages/common/
 COPY packages/warehouses/package.json ./packages/warehouses/
 COPY packages/backend/package.json ./packages/backend/
 COPY packages/frontend/package.json ./packages/frontend/
+COPY packages/cli/package.json ./packages/cli/
 RUN yarn install --pure-lockfile --non-interactive
 
 # Build common
@@ -119,6 +120,11 @@ RUN yarn --cwd ./packages/common/ build
 COPY packages/warehouses/tsconfig.json ./packages/warehouses/
 COPY packages/warehouses/src/ ./packages/warehouses/src/
 RUN yarn --cwd ./packages/warehouses/ build
+
+# Build cli
+COPY packages/cli/tsconfig.json ./packages/cli/
+COPY packages/cli/src/ ./packages/cli/src/
+RUN yarn --cwd ./packages/cli/ build
 
 # Build backend
 COPY packages/backend/tsconfig.json ./packages/backend/
@@ -136,6 +142,42 @@ RUN rm -rf node_modules \
 # Install production dependencies
 ENV NODE_ENV production
 RUN yarn install --pure-lockfile --non-interactive --production
+
+# -----------------------------
+# Stage 3a: cli image
+# -----------------------------
+
+FROM node:20-bookworm-slim as cli
+WORKDIR /usr/app
+
+ENV NODE_ENV production
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-psycopg2 \
+    python3-venv \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=prod-builder  /usr/local/dbt1.4 /usr/local/dbt1.4
+COPY --from=prod-builder  /usr/local/dbt1.5 /usr/local/dbt1.5
+COPY --from=prod-builder  /usr/local/dbt1.6 /usr/local/dbt1.6
+COPY --from=prod-builder  /usr/local/dbt1.7 /usr/local/dbt1.7
+COPY --from=prod-builder /usr/app /usr/app
+
+RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt1.4 \
+    && ln -s /usr/local/dbt1.5/bin/dbt /usr/local/bin/dbt1.5 \
+    && ln -s /usr/local/dbt1.6/bin/dbt /usr/local/bin/dbt \
+    && ln -s /usr/local/dbt1.7/bin/dbt /usr/local/bin/dbt1.7
+
+RUN mkdir -p /dbt
+WORKDIR /dbt
+
+# Run backend
+ENTRYPOINT ["/usr/app/packages/cli/dist/index.js"]
+CMD ["help"]
+
 
 # -----------------------------
 # Stage 3: execution environment for backend

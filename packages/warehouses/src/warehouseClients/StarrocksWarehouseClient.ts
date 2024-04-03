@@ -25,8 +25,33 @@ interface TableInfo {
     table: string;
 }
 
+export enum StarrocksTypes {
+    BOOLEAN = 'boolean',
+    TINYINT = 'tinyint',
+    SMALLINT = 'smallint',
+    INTEGER = 'integer',
+    BIGINT = 'bigint',
+    REAL = 'real',
+    DOUBLE = 'double',
+    DECIMAL = 'decimal',
+    VARCHAR = 'varchar',
+    CHAR = 'char',
+    VARBINARY = 'varbinary',
+    JSON = 'json',
+    DATE = 'date',
+    TIME = 'time',
+    TIME_TZ = 'time with time zone',
+    TIMESTAMP = 'timestamp',
+    TIMESTAMP_TZ = 'timestamp with time zone',
+    INTERVAL_YEAR_MONTH = 'interval year to month',
+    INTERVAL_DAY_TIME = 'interval day to second',
+    ARRAY = 'array',
+    MAP = 'map',
+    ROW = 'row',
+    UUID = 'uuid',
+}
+
 const queryTableSchema = ({
-    database,
     schema,
     table,
 }: TableInfo) => `SELECT table_catalog
@@ -34,12 +59,45 @@ const queryTableSchema = ({
             , table_name
             , column_name
             , data_type
-    FROM ${database}.information_schema.columns
-    WHERE table_catalog = '${database}'
+    FROM default_catalog.information_schema.columns
+    WHERE 
         AND table_schema = '${schema}'
         AND table_name = '${table}'
     ORDER BY 1, 2, 3, ordinal_position`;
 
+
+
+const convertStarrocksDataTypeToDimensionType = (
+    type: StarrocksTypes | string,
+): DimensionType => {
+    const typeWithoutTimePrecision = type.replace(/\(\d\)/, '');
+    switch (typeWithoutTimePrecision) {
+        case StarrocksTypes.BOOLEAN:
+            return DimensionType.BOOLEAN;
+        case StarrocksTypes.TINYINT:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.SMALLINT:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.INTEGER:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.BIGINT:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.REAL:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.DOUBLE:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.DECIMAL:
+            return DimensionType.NUMBER;
+        case StarrocksTypes.DATE:
+            return DimensionType.DATE;
+        case StarrocksTypes.TIMESTAMP:
+            return DimensionType.TIMESTAMP;
+        case StarrocksTypes.TIMESTAMP_TZ:
+            return DimensionType.TIMESTAMP;
+        default:
+            return DimensionType.STRING;
+    }
+};
 const convertDataTypeToDimensionType = (
     type: number | undefined,
 ): DimensionType => {
@@ -69,28 +127,28 @@ const convertDataTypeToDimensionType = (
 
 const catalogToSchema = (results: string[][][]): WarehouseCatalog => {
     const warehouseCatalog: WarehouseCatalog = {};
-    // Object.values(results).forEach((catalog) => {
-    //     Object.values(catalog).forEach(
-    //         ([
-    //             table_catalog,
-    //             table_schema,
-    //             table_name,
-    //             column_name,
-    //             data_type,
-    //         ]) => {
-    //             warehouseCatalog[table_catalog] =
-    //                 warehouseCatalog[table_catalog] || {};
-    //             warehouseCatalog[table_catalog][table_schema] =
-    //                 warehouseCatalog[table_catalog][table_schema] || {};
-    //             warehouseCatalog[table_catalog][table_schema][table_name] =
-    //                 warehouseCatalog[table_catalog][table_schema][table_name] ||
-    //                 {};
-    //             warehouseCatalog[table_catalog][table_schema][table_name][
-    //                 column_name
-    //             ] = convertDataTypeToDimensionType(data_type as number);
-    //         },
-    //     );
-    // });
+    Object.values(results).forEach((catalog) => {
+        Object.values(catalog).forEach(
+            ([
+                table_catalog,
+                table_schema,
+                table_name,
+                column_name,
+                data_type,
+            ]) => {
+                warehouseCatalog[table_catalog] =
+                    warehouseCatalog[table_catalog] || {};
+                warehouseCatalog[table_catalog][table_schema] =
+                    warehouseCatalog[table_catalog][table_schema] || {};
+                warehouseCatalog[table_catalog][table_schema][table_name] =
+                    warehouseCatalog[table_catalog][table_schema][table_name] ||
+                    {};
+                warehouseCatalog[table_catalog][table_schema][table_name][
+                    column_name
+                ] = convertStarrocksDataTypeToDimensionType(data_type);
+            },
+        );
+    });
     return warehouseCatalog;
 };
 
@@ -160,11 +218,23 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
 
     // TODO: Implement
     async getCatalog(requests: TableInfo[]): Promise<WarehouseCatalog> {
-        const { session, close } = await this.getSession();
-        let results: string[][][];
-        // query = this.runQuery(queryTableSchema(requests[0]));
-        console.log('REQUESTING CATALOG', requests);
-        return catalogToSchema([]);
+        const warehouseCatalog: WarehouseCatalog = {};
+    
+        await Promise.all(requests.map(async (request) => {
+            let query: RowDataPacket[] | null = null;
+
+            try {
+                query = await session.query(queryTableSchema(request));
+                const result = (await query.next()).value.data ?? [];
+                return result;
+            } catch (e: any) {
+                throw new WarehouseQueryError(e.message);
+            } finally {
+                if (query) close();
+            }
+        }));
+        
+        return warehouseCatalog
     }
 
     getFieldQuoteChar() {
