@@ -17,7 +17,7 @@ Use this docker image:
 
 To run cli, use dockerized one, there is no pypi release for it.
 
-```docker run -v $(pwd)/dbt-project:/dbt lightdash/cli:latest --help```
+```docker run -v $(pwd)/dbt-project:/dbt hhhonzik/lightdash-cli:latest --help```
 
 ## Development
 
