@@ -9,6 +9,7 @@ jaffle_shop_starrocks:
       host: host.docker.internal
       port: 9030
       schema: analytics
+      catalog: default_catalog
       # User/password auth
       username: root
       password:

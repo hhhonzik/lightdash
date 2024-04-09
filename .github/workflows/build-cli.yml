@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY_IMAGE: hhhonzik/lightdash
+  REGISTRY_IMAGE: hhhonzik/lightdash-cli
   REGISTRY: docker.io
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
       matrix:
         platform:
           - linux/amd64
-          # - linux/arm64
+          - linux/arm64
     steps:
       # Write the PLATFORM_PAIR varible to env and replace `/` with `-`
       - name: Prepare
@@ -64,10 +64,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           file: dockerfile
-          target: prod
+          target: cli
           push: ${{ github.event_name != 'pull_request' }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platform }}
+
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,mode=min,ref={0}/{1}', env.REGISTRY, env.REGISTRY_IMAGE) || '' }}
