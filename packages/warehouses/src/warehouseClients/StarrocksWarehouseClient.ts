@@ -52,6 +52,7 @@ export enum StarrocksTypes {
 }
 
 const queryTableSchema = ({
+    database,
     schema,
     table,
 }: TableInfo) => `SELECT table_catalog
@@ -60,8 +61,8 @@ const queryTableSchema = ({
             , column_name
             , data_type
     FROM default_catalog.information_schema.columns
-    WHERE 
-        AND table_schema = '${schema}'
+    WHERE
+        table_schema = '${schema}'
         AND table_name = '${table}'
     ORDER BY 1, 2, 3, ordinal_position`;
 
@@ -125,33 +126,6 @@ const convertDataTypeToDimensionType = (
     }
 };
 
-const catalogToSchema = (results: string[][][]): WarehouseCatalog => {
-    const warehouseCatalog: WarehouseCatalog = {};
-    Object.values(results).forEach((catalog) => {
-        Object.values(catalog).forEach(
-            ([
-                table_catalog,
-                table_schema,
-                table_name,
-                column_name,
-                data_type,
-            ]) => {
-                warehouseCatalog[table_catalog] =
-                    warehouseCatalog[table_catalog] || {};
-                warehouseCatalog[table_catalog][table_schema] =
-                    warehouseCatalog[table_catalog][table_schema] || {};
-                warehouseCatalog[table_catalog][table_schema][table_name] =
-                    warehouseCatalog[table_catalog][table_schema][table_name] ||
-                    {};
-                warehouseCatalog[table_catalog][table_schema][table_name][
-                    column_name
-                ] = convertStarrocksDataTypeToDimensionType(data_type);
-            },
-        );
-    });
-    return warehouseCatalog;
-};
-
 export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrocksCredentials> {
     connectionOptions: ConnectionOptions;
 
@@ -160,7 +134,8 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
         this.connectionOptions = {
             user: credentials.user,
             password: credentials.password,
-            database: credentials.schema,
+            // database: credentials.catalog ? `${credentials.catalog}.${credentials.schema}` : credentials.schema,
+            // database: credentials.catalog,
             host: credentials.host,
             port: credentials.port,
         };
@@ -221,16 +196,28 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
         const warehouseCatalog: WarehouseCatalog = {};
     
         await Promise.all(requests.map(async (request) => {
-            let query: RowDataPacket[] | null = null;
-
             try {
-                query = await session.query(queryTableSchema(request));
-                const result = (await query.next()).value.data ?? [];
-                return result;
+                const { rows } = await this.runQuery(queryTableSchema(request));
+                rows.forEach((row) => {
+                    row.table_catalog = row.table_catalog ?? request.database;
+
+                    if (!warehouseCatalog[row.table_catalog]) {
+                        warehouseCatalog[row.table_catalog] = {}
+                    }
+                    if (!warehouseCatalog[row.table_catalog][row.table_schema]) {
+                        warehouseCatalog[row.table_catalog][row.table_schema] = {}
+                    }
+
+                    if (!warehouseCatalog[row.table_catalog][row.table_schema][row.table_name]) {
+                        warehouseCatalog[row.table_catalog][row.table_schema][row.table_name] = {}
+                    }
+
+                    warehouseCatalog[row.table_catalog][row.table_schema][row.table_name][row.column_name] = convertStarrocksDataTypeToDimensionType(row.data_type);   
+                })
+                // const result = (await query.next()).value.data ?? [];
+                // return result;
             } catch (e: any) {
                 throw new WarehouseQueryError(e.message);
-            } finally {
-                if (query) close();
             }
         }));
         

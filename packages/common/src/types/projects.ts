@@ -126,7 +126,7 @@ export type CreateStarrocksCredentials = {
     requireUserCredentials?: boolean;
     port: number;
     schema: string;
-    catalog: string;
+    catalog?: string;
     startOfWeek?: WeekDay | null;
 };
 export type StarrocksCredentials = Omit<

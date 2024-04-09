@@ -126,7 +126,8 @@ const credentialsTarget = (
                     user: envVarReference('user'),
                     password: envVarReference('password'),
                     port: credentials.port,
-                    schema: credentials.schema
+                    schema: credentials.schema,
+                    catalog: credentials.catalog
                 },
                 environment: {
                     [envVar('user')]: credentials.user,

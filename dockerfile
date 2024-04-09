@@ -54,7 +54,7 @@ RUN ln -s /usr/local/dbt1.4/bin/dbt /usr/local/bin/dbt1.4\
     "dbt-snowflake~=1.6.0" \
     "dbt-bigquery~=1.6.0" \
     "dbt-databricks~=1.6.0" \
-    "dbt-starrocks~=1.4.2" \
+    "dbt-starrocks~=1.6.0" \
     "dbt-trino==1.6.0" \
     "psycopg2-binary==2.9.6"\
     && ln -s /usr/local/dbt1.6/bin/dbt /usr/local/bin/dbt \
