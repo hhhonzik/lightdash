@@ -8,11 +8,11 @@ export const getFieldQuoteChar = (
         switch (warehouseType) {
             case WarehouseTypes.BIGQUERY:
             case WarehouseTypes.DATABRICKS:
+            case WarehouseTypes.STARROCKS:
                 return '`';
             case WarehouseTypes.SNOWFLAKE:
             case WarehouseTypes.REDSHIFT:
             case WarehouseTypes.POSTGRES:
-            case WarehouseTypes.STARROCKS:
             case WarehouseTypes.TRINO:
                 return '"';
             default:
