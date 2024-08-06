@@ -2981,6 +2981,8 @@ export class ProjectService extends BaseService {
             case WarehouseTypes.POSTGRES:
             case WarehouseTypes.TRINO:
                 return credentials.dbname;
+            case WarehouseTypes.STARROCKS:
+                return credentials.schema;
             case WarehouseTypes.SNOWFLAKE:
             case WarehouseTypes.DATABRICKS:
                 return credentials.database.toLowerCase();
