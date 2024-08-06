@@ -107,7 +107,7 @@ COPY packages/warehouses/package.json ./packages/warehouses/
 COPY packages/backend/package.json ./packages/backend/
 COPY packages/frontend/package.json ./packages/frontend/
 COPY packages/cli/package.json ./packages/cli/
-RUN yarn install --pure-lockfile --non-interactive
+RUN yarn config set network-timeout 300000 && yarn install --pure-lockfile --non-interactive
 
 # Build common
 COPY packages/common/tsconfig.json ./packages/common/
