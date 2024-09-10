@@ -39,6 +39,7 @@ export const getAggregatedField = (
             case WarehouseTypes.SNOWFLAKE:
             case WarehouseTypes.REDSHIFT:
             case WarehouseTypes.TRINO:
+            case WarehouseTypes.STARROCKS:
                 const aggregationFunction =
                     aggregation === VizAggregationOptions.ANY
                         ? 'ANY_VALUE'
