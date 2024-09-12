@@ -6,6 +6,7 @@ import {
     SupportedDbtAdapter,
     WarehouseConnectionError,
     WarehouseQueryError,
+    WarehouseResults,
 } from '@lightdash/common';
 import {
     Connection,
@@ -169,32 +170,45 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
     }
 
 
-    async runQuery(sql: string, tags?: Record<string, string>) {
+    async streamQuery(
+        sql: string,
+        streamCallback: (data: WarehouseResults) => void,
+        options: {
+            values?: any[];
+            tags?: Record<string, string>;
+            timezone?: string;
+        },
+    ): Promise<void> {
         const { session, close } = await this.getSession();
         let rows: RowDataPacket[]
         let fields: FieldPacket[];
         try {
             let alteredQuery = sql;
-            if (tags) {
-                alteredQuery = `${alteredQuery}\n-- ${JSON.stringify(tags)}`;
+            if (options.tags) {
+                alteredQuery = `${alteredQuery}\n-- ${JSON.stringify(options.tags)}`;
             }
-            [rows, fields] = await session.query<RowDataPacket[]>(sql);
+            
+            console.log('trying to run query', sql, options.values)
+            const [rows, fields] = await session.query<RowDataPacket[]>(alteredQuery, options.values);
 
-            return {
+            console.log(rows);
+            console.log(this.convertQueryResultFields(fields));
+
+            streamCallback({
                 fields: this.convertQueryResultFields(fields),
                 rows
-            };
+            })
         } catch (e: any) {
+            console.log(e)
             throw new WarehouseQueryError(e.message);
         } finally {
             await close();
         }
     }
 
-    // TODO: Implement
     async getCatalog(requests: TableInfo[]): Promise<WarehouseCatalog> {
         const warehouseCatalog: WarehouseCatalog = {};
-    
+
         await Promise.all(requests.map(async (request) => {
             try {
                 const { rows } = await this.runQuery(queryTableSchema(request));
@@ -212,7 +226,7 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
                         warehouseCatalog[row.table_catalog][row.table_schema][row.table_name] = {}
                     }
 
-                    warehouseCatalog[row.table_catalog][row.table_schema][row.table_name][row.column_name] = convertStarrocksDataTypeToDimensionType(row.data_type);   
+                    warehouseCatalog[row.table_catalog][row.table_schema][row.table_name][row.column_name] = convertStarrocksDataTypeToDimensionType(row.data_type);
                 })
                 // const result = (await query.next()).value.data ?? [];
                 // return result;
@@ -220,12 +234,69 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
                 throw new WarehouseQueryError(e.message);
             }
         }));
-        
+
         return warehouseCatalog
     }
 
+    async getAllTables() {
+        const databaseName = this.connectionOptions.database;
+        const whereSql = databaseName ? `AND table_catalog = ?` : '';
+        const filterSystemTables = `AND table_schema NOT IN ('information_schema', 'pg_catalog')`;
+        const query = `
+            SELECT table_catalog, table_schema, table_name
+            FROM information_schema.tables
+            WHERE table_type = 'BASE TABLE'
+                ${whereSql}
+                ${filterSystemTables}
+            ORDER BY 1, 2, 3
+        `;
+        const { rows } = await this.runQuery(
+            query,
+            {},
+            undefined,
+            databaseName ? [databaseName] : [],
+        );
+        return rows.map((row) => ({
+            database: row.table_catalog,
+            schema: row.table_schema,
+            table: row.table_name,
+        }));
+    }
+
+    async getFields(
+        tableName: string,
+        schema?: string,
+        database?: string,
+        tags?: Record<string, string>,
+    ): Promise<WarehouseCatalog> {
+        const query = `
+            SELECT table_catalog,
+                   table_schema,
+                   table_name,
+                   column_name,
+                   data_type
+            FROM information_schema.columns
+            WHERE table_name = ?
+            ${schema ? 'AND table_schema = ?' : ''}
+        `;
+
+        const values = [tableName];
+        if (schema) {
+            values.push(schema);
+        }
+        const { rows } = await this.runQuery(query, tags, undefined, values);
+
+        const rowsWithCatalog = rows.map(v => {
+            v['table_catalog'] = database;
+            return v
+        })
+
+        return this.parseWarehouseCatalog(rowsWithCatalog, convertStarrocksDataTypeToDimensionType);
+    }
+
+
     getFieldQuoteChar() {
-        return '';
+        return '"';
     }
 
     getStringQuoteChar() {
