@@ -239,7 +239,7 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
         const whereSql = databaseName ? `AND table_catalog = ?` : '';
         const filterSystemTables = `AND table_schema NOT IN ('information_schema', '_statistics_')`;
         const query = `
-            SELECT (when case table_catalog = 'def' then 'default_catalog' else table_catalog end) as table_catalog, table_schema, table_name
+            SELECT (case when table_catalog = 'def' then 'default_catalog' else table_catalog end) as table_catalog, table_schema, table_name
             FROM information_schema.tables
             WHERE
                 ${whereSql}
