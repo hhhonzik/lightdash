@@ -188,11 +188,7 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
                 alteredQuery = `${alteredQuery}\n-- ${JSON.stringify(options.tags)}`;
             }
             
-            console.log('trying to run query', sql, options.values)
             const [rows, fields] = await session.query<RowDataPacket[]>(alteredQuery, options.values);
-
-            console.log(rows);
-            console.log(this.convertQueryResultFields(fields));
 
             streamCallback({
                 fields: this.convertQueryResultFields(fields),
@@ -243,9 +239,9 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
         const whereSql = databaseName ? `AND table_catalog = ?` : '';
         const filterSystemTables = `AND table_schema NOT IN ('information_schema', 'pg_catalog')`;
         const query = `
-            SELECT table_catalog, table_schema, table_name
+            SELECT (when case table_catalog = 'def' then 'default_catalog' else table_catalog end) as table_catalog, table_schema, table_name
             FROM information_schema.tables
-            WHERE table_type = 'BASE TABLE'
+            WHERE
                 ${whereSql}
                 ${filterSystemTables}
             ORDER BY 1, 2, 3
