@@ -236,7 +236,7 @@ export class StarrocksWarehouseClient extends WarehouseBaseClient<CreateStarrock
 
     async getAllTables() {
         const databaseName = this.connectionOptions.database;
-        const whereSql = databaseName ? `AND table_catalog = ?` : '';
+        const whereSql = databaseName ? `table_catalog = ?` : '1=1';
         const filterSystemTables = `AND table_schema NOT IN ('information_schema', '_statistics_')`;
         const query = `
             SELECT (case when table_catalog = 'def' then 'default_catalog' else table_catalog end) as table_catalog, table_schema, table_name
