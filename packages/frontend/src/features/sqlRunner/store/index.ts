@@ -6,16 +6,30 @@ import { barChartConfigSlice } from '../../../components/DataViz/store/barChartS
 import { lineChartConfigSlice } from '../../../components/DataViz/store/lineChartSlice';
 import { pieChartConfigSlice } from '../../../components/DataViz/store/pieChartSlice';
 import { tableVisSlice } from '../../../components/DataViz/store/tableVisSlice';
+import { semanticViewerSlice } from '../../semanticViewer/store/semanticViewerSlice';
+import { listenerMiddleware } from './listenerMiddleware';
 import { sqlRunnerSlice } from './sqlRunnerSlice';
 
+// TODO: move this store to `frontend/src`
 export const store = configureStore({
     reducer: {
-        sqlRunner: sqlRunnerSlice.reducer,
+        // TODO: important because selectors assume that
+        [sqlRunnerSlice.name]: sqlRunnerSlice.reducer,
         barChartConfig: barChartConfigSlice.reducer,
         lineChartConfig: lineChartConfigSlice.reducer,
         pieChartConfig: pieChartConfigSlice.reducer,
         tableVisConfig: tableVisSlice.reducer,
+        [semanticViewerSlice.name]: semanticViewerSlice.reducer,
     },
+    // Add the listener middleware to the store, this is useful for listening to actions and running side effects
+    middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware({
+            serializableCheck: {
+                // Ignore the getChartSpec function in the payload when pivoting chart data
+                // This is because the function is not serializable, but we need to keep its instance to get the correct chart spec (see prepareAndFetchChartData thunk)
+                ignoredActionPaths: ['payload.getChartSpec'],
+            },
+        }).prepend(listenerMiddleware.middleware),
     devTools: process.env.NODE_ENV === 'development',
 });
 

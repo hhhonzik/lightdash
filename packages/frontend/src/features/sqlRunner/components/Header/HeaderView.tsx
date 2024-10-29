@@ -1,4 +1,5 @@
 import { subject } from '@casl/ability';
+import { DashboardTileTypes } from '@lightdash/common';
 import {
     ActionIcon,
     Button,
@@ -32,7 +33,7 @@ export const HeaderView: FC = () => {
     const savedSqlChart = useAppSelector(
         (state) => state.sqlRunner.savedSqlChart,
     );
-    const isAddToDashboard = useAppSelector(
+    const isAddToDashboardModalOpen = useAppSelector(
         (state) => state.sqlRunner.modals.addToDashboard.isOpen,
     );
     const onCloseAddToDashboardModal = useCallback(() => {
@@ -120,54 +121,59 @@ export const HeaderView: FC = () => {
                             </Button>
                         )}
 
-                        <Menu
-                            position="bottom"
-                            withArrow
-                            withinPortal
-                            shadow="md"
-                            width={200}
-                        >
-                            <Menu.Target>
-                                <ActionIcon variant="default">
-                                    <MantineIcon icon={IconDots} />
-                                </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                                <Menu.Label>Manage</Menu.Label>
-                                <Menu.Item
-                                    icon={
-                                        <MantineIcon icon={IconLayoutGridAdd} />
-                                    }
-                                    onClick={() =>
-                                        dispatch(toggleModal('addToDashboard'))
-                                    }
-                                >
-                                    Add to dashboard
-                                </Menu.Item>
-                                <Menu.Item
-                                    icon={
-                                        <MantineIcon
-                                            icon={IconTrash}
-                                            color="red"
-                                        />
-                                    }
-                                    color="red"
-                                    disabled={
-                                        !(canManageSqlRunner && canManageChart)
-                                    }
-                                    onClick={() =>
-                                        dispatch(
-                                            toggleModal('deleteChartModal'),
-                                        )
-                                    }
-                                >
-                                    Delete
-                                </Menu.Item>
-                            </Menu.Dropdown>
-                        </Menu>
+                        {canManageChart && (
+                            <Menu
+                                position="bottom"
+                                withArrow
+                                withinPortal
+                                shadow="md"
+                                width={200}
+                            >
+                                <Menu.Target>
+                                    <ActionIcon variant="default">
+                                        <MantineIcon icon={IconDots} />
+                                    </ActionIcon>
+                                </Menu.Target>
+                                <Menu.Dropdown>
+                                    <Menu.Label>Manage</Menu.Label>
+                                    <Menu.Item
+                                        icon={
+                                            <MantineIcon
+                                                icon={IconLayoutGridAdd}
+                                            />
+                                        }
+                                        onClick={() =>
+                                            dispatch(
+                                                toggleModal('addToDashboard'),
+                                            )
+                                        }
+                                    >
+                                        Add to dashboard
+                                    </Menu.Item>
+                                    <Menu.Item
+                                        icon={
+                                            <MantineIcon
+                                                icon={IconTrash}
+                                                color="red"
+                                            />
+                                        }
+                                        color="red"
+                                        disabled={!canManageSqlRunner}
+                                        onClick={() =>
+                                            dispatch(
+                                                toggleModal('deleteChartModal'),
+                                            )
+                                        }
+                                    >
+                                        Delete
+                                    </Menu.Item>
+                                </Menu.Dropdown>
+                            </Menu>
+                        )}
                     </Group>
                 </Group>
             </Paper>
+
             <DeleteSqlChartModal
                 projectUuid={projectUuid}
                 savedSqlUuid={savedSqlChart.savedSqlUuid}
@@ -176,11 +182,12 @@ export const HeaderView: FC = () => {
                 onClose={onCloseDeleteModal}
                 onSuccess={() => history.push(`/projects/${projectUuid}/home`)}
             />
-            {isAddToDashboard && (
+            {isAddToDashboardModalOpen && (
                 <AddTilesToDashboardModal
                     isOpen={true}
                     projectUuid={projectUuid}
-                    savedSqlChartUuid={savedSqlChart.savedSqlUuid}
+                    uuid={savedSqlChart.savedSqlUuid}
+                    dashboardTileType={DashboardTileTypes.SQL_CHART}
                     onClose={onCloseAddToDashboardModal}
                 />
             )}

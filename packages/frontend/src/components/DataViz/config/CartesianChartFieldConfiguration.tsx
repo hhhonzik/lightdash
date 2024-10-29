@@ -1,35 +1,41 @@
 import {
     DimensionType,
     type ChartKind,
-    type VizChartLayout,
+    type PivotChartLayout,
     type VizColumn,
+    type VizConfigErrors,
     type VizIndexLayoutOptions,
     type VizPivotLayoutOptions,
-    type VizValuesLayoutOptions,
 } from '@lightdash/common';
-import { ActionIcon, Box } from '@mantine/core';
-import { IconX } from '@tabler/icons-react';
+import { ActionIcon, Box, Group, Stack, Tooltip } from '@mantine/core';
+import { IconMinus, IconPlus, IconX } from '@tabler/icons-react';
 import { type FC } from 'react';
+import {
+    useAppDispatch as useVizDispatch,
+    useAppSelector as useVizSelector,
+} from '../../../features/sqlRunner/store/hooks';
 import MantineIcon from '../../common/MantineIcon';
-import { AddButton } from '../../VisualizationConfigs/common/AddButton';
 import { Config } from '../../VisualizationConfigs/common/Config';
 import { FieldReferenceSelect } from '../FieldReferenceSelect';
-import {
-    useVizDispatch,
-    useVizSelector,
-    type CartesianChartActionsType,
-} from '../store';
+import { type BarChartActionsType } from '../store/barChartSlice';
+import { type LineChartActionsType } from '../store/lineChartSlice';
 import { cartesianChartSelectors } from '../store/selectors';
 import { DataVizAggregationConfig } from './DataVizAggregationConfig';
+import { DataVizSortConfig } from './DataVizSortConfig';
 
 const YFieldsAxisConfig: FC<{
-    field: VizChartLayout['y'][number];
-    yLayoutOptions: VizValuesLayoutOptions[];
+    field: PivotChartLayout['y'][number];
+    yLayoutOptions: VizIndexLayoutOptions[];
     isSingle: boolean;
     index: number;
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
     columns: VizColumn[];
-}> = ({ field, yLayoutOptions, isSingle, index, actions, columns }) => {
+    error:
+        | NonNullable<
+              VizConfigErrors['customMetricFieldError']
+          >['references'][number]
+        | undefined;
+}> = ({ field, yLayoutOptions, isSingle, index, actions, columns, error }) => {
     const dispatch = useVizDispatch();
 
     return (
@@ -44,60 +50,75 @@ const YFieldsAxisConfig: FC<{
             >
                 <Config>
                     <Config.Section>
-                        <FieldReferenceSelect
-                            clearable
-                            data={yLayoutOptions.map((y) => ({
-                                value: y.reference,
-                                label: y.reference,
-                            }))}
-                            value={field.reference}
-                            error={
-                                yLayoutOptions.find(
-                                    (y) => y.reference === field.reference,
-                                ) === undefined &&
-                                `Column "${field.reference}" does not exist. Choose another`
-                            }
-                            placeholder="Select Y axis"
-                            onChange={(value) => {
-                                if (!value) {
-                                    dispatch(actions.removeYAxisField(index));
-                                } else
-                                    dispatch(
-                                        actions.setYAxisReference({
-                                            reference: value,
-                                            index,
-                                        }),
-                                    );
-                            }}
-                            fieldType={
-                                columns?.find(
-                                    (x) => x.reference === field.reference,
-                                )?.type ?? DimensionType.STRING
-                            }
-                        />
-
-                        <Config.Group>
-                            <Config.Label>Aggregation</Config.Label>
-
-                            <DataVizAggregationConfig
-                                options={
-                                    yLayoutOptions.find(
-                                        (layout) =>
-                                            layout.reference ===
-                                            field.reference,
-                                    )?.aggregationOptions
+                        <Group spacing="xs">
+                            <FieldReferenceSelect
+                                sx={{
+                                    flex: 1,
+                                }}
+                                data={yLayoutOptions.map((y) => ({
+                                    value: y.reference,
+                                    label: y.reference,
+                                }))}
+                                value={field.reference}
+                                error={
+                                    !!error &&
+                                    `Column "${error}" does not exist. Choose another`
                                 }
-                                aggregation={field.aggregation}
-                                onChangeAggregation={(value) =>
-                                    dispatch(
-                                        actions.setYAxisAggregation({
-                                            index,
-                                            aggregation: value,
-                                        }),
+                                placeholder="Select Y axis"
+                                onChange={(value) => {
+                                    if (value) {
+                                        dispatch(
+                                            actions.setYAxisReference({
+                                                reference: value,
+                                                index,
+                                            }),
+                                        );
+                                    }
+                                }}
+                                fieldType={
+                                    columns?.find(
+                                        (x) => x.reference === field.reference,
+                                    )?.type ?? DimensionType.STRING
+                                }
+                                rightSection={
+                                    field?.reference && (
+                                        <DataVizAggregationConfig
+                                            options={
+                                                yLayoutOptions.find(
+                                                    (layout) =>
+                                                        layout.reference ===
+                                                        field.reference,
+                                                )?.aggregationOptions
+                                            }
+                                            aggregation={field.aggregation}
+                                            onChangeAggregation={(value) =>
+                                                dispatch(
+                                                    actions.setYAxisAggregation(
+                                                        {
+                                                            index,
+                                                            aggregation: value,
+                                                        },
+                                                    ),
+                                                )
+                                            }
+                                        />
                                     )
                                 }
                             />
-                        </Config.Group>
+                            <Tooltip variant="xs" label="Remove Y axis">
+                                <ActionIcon
+                                    color="gray.6"
+                                    variant="subtle"
+                                    onClick={() =>
+                                        dispatch(
+                                            actions.removeYAxisField(index),
+                                        )
+                                    }
+                                >
+                                    <MantineIcon icon={IconMinus} />
+                                </ActionIcon>
+                            </Tooltip>
+                        </Group>
                     </Config.Section>
                 </Config>
             </Box>
@@ -110,42 +131,69 @@ const XFieldAxisConfig = ({
     xLayoutOptions,
     actions,
     columns,
+    error,
 }: {
     columns: VizColumn[];
-
-    field: VizChartLayout['x'] | undefined;
+    field: ReturnType<typeof cartesianChartSelectors.getXAxisField> | undefined;
     xLayoutOptions: VizIndexLayoutOptions[];
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
+    error: VizConfigErrors['indexFieldError'];
 }) => {
     const dispatch = useVizDispatch();
 
     return (
-        <FieldReferenceSelect
-            clearable
-            data={xLayoutOptions.map((x) => ({
-                value: x.reference,
-                label: x.reference,
-            }))}
-            value={field?.reference ?? null}
-            placeholder="Select X axis"
-            onChange={(value) => {
-                if (!value) {
-                    dispatch(actions.removeXAxisField());
-                } else dispatch(actions.setXAxisReference(value));
-            }}
-            error={
-                field?.reference &&
-                xLayoutOptions.find((x) => x.reference === field.reference) ===
-                    undefined &&
-                `Column "${field.reference}" does not exist. Choose another`
-            }
-            fieldType={
-                (field?.reference &&
-                    columns?.find((x) => x.reference === field.reference)
-                        ?.type) ||
-                DimensionType.STRING
-            }
-        />
+        <Group spacing="xs">
+            <FieldReferenceSelect
+                sx={{
+                    flex: 1,
+                }}
+                data={xLayoutOptions.map((x) => ({
+                    value: x.reference,
+                    label: x.reference,
+                }))}
+                value={field?.reference ?? null}
+                placeholder="Select X axis"
+                onChange={(value) =>
+                    value && dispatch(actions.setXAxisReference(value))
+                }
+                error={
+                    error &&
+                    `Column "${error.reference}" does not exist. Choose another`
+                }
+                fieldType={
+                    (field?.reference &&
+                        columns?.find((x) => x.reference === field.reference)
+                            ?.type) ||
+                    DimensionType.STRING
+                }
+                rightSection={
+                    field?.reference && (
+                        <DataVizSortConfig
+                            sortBy={field.sortBy?.direction}
+                            onChangeSortBy={(value) =>
+                                field.reference &&
+                                dispatch(
+                                    actions.setSortBy({
+                                        reference: field.reference,
+                                        direction: value,
+                                    }),
+                                )
+                            }
+                        />
+                    )
+                }
+            />
+            <Tooltip variant="xs" label="Remove X axis">
+                <ActionIcon
+                    color="gray.6"
+                    variant="subtle"
+                    onClick={() => dispatch(actions.removeXAxisField())}
+                    data-testid="remove-x-axis-field"
+                >
+                    <MantineIcon icon={IconMinus} />
+                </ActionIcon>
+            </Tooltip>
+        </Group>
     );
 };
 
@@ -154,23 +202,23 @@ const GroupByFieldAxisConfig = ({
     groupByOptions = [],
     actions,
     columns,
+    error,
 }: {
     columns: VizColumn[];
     field: undefined | { reference: string };
     groupByOptions?: VizPivotLayoutOptions[];
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
+    error: VizConfigErrors['groupByFieldError'];
 }) => {
     const dispatch = useVizDispatch();
-    const error =
-        field !== undefined &&
-        !groupByOptions.find((x) => x.reference === field.reference)
-            ? `Column "${field.reference}" does not exist. Choose another`
-            : undefined;
+    const groupByError = error?.references[0]
+        ? `Column "${error.references[0]}" does not exist. Choose another`
+        : undefined;
     return (
         <FieldReferenceSelect
             rightSection={
                 // When the field is deleted, the error state prevents the clear button from showing
-                error && (
+                groupByError && (
                     <ActionIcon
                         onClick={() =>
                             dispatch(actions.unsetGroupByReference())
@@ -187,7 +235,7 @@ const GroupByFieldAxisConfig = ({
             }))}
             value={field?.reference ?? null}
             placeholder="Select group by"
-            error={error}
+            error={groupByError}
             onChange={(value) => {
                 if (!value) {
                     dispatch(actions.unsetGroupByReference());
@@ -214,8 +262,7 @@ export const CartesianChartFieldConfiguration = ({
 }: {
     selectedChartType: ChartKind;
     columns: VizColumn[];
-
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
 }) => {
     const dispatch = useVizDispatch();
     const xLayoutOptions = useVizSelector((state) =>
@@ -227,6 +274,7 @@ export const CartesianChartFieldConfiguration = ({
             selectedChartType,
         ),
     );
+
     const xAxisField = useVizSelector((state) =>
         cartesianChartSelectors.getXAxisField(state, selectedChartType),
     );
@@ -240,8 +288,12 @@ export const CartesianChartFieldConfiguration = ({
         cartesianChartSelectors.getPivotLayoutOptions(state, selectedChartType),
     );
 
+    const errors = useVizSelector((state) =>
+        cartesianChartSelectors.getErrors(state, selectedChartType),
+    );
+
     return (
-        <>
+        <Stack spacing="xl" mt="sm">
             <Config>
                 <Config.Section>
                     <Config.Heading>{`X-axis`}</Config.Heading>
@@ -251,6 +303,7 @@ export const CartesianChartFieldConfiguration = ({
                             field={xAxisField}
                             xLayoutOptions={xLayoutOptions}
                             actions={actions}
+                            error={errors?.indexFieldError}
                         />
                     )}
                 </Config.Section>
@@ -259,9 +312,18 @@ export const CartesianChartFieldConfiguration = ({
                 <Config.Section>
                     <Config.Group>
                         <Config.Heading>{`Y-axis`}</Config.Heading>
-                        <AddButton
-                            onClick={() => dispatch(actions.addYAxisField())}
-                        ></AddButton>
+                        <Tooltip variant="xs" label="Add Y axis">
+                            <ActionIcon
+                                color="gray.6"
+                                variant="subtle"
+                                onClick={() =>
+                                    dispatch(actions.addYAxisField())
+                                }
+                                data-testid="add-y-axis-field"
+                            >
+                                <MantineIcon icon={IconPlus} />
+                            </ActionIcon>
+                        </Tooltip>
                     </Config.Group>
                     {yLayoutOptions &&
                         yAxisFields &&
@@ -269,11 +331,17 @@ export const CartesianChartFieldConfiguration = ({
                             <YFieldsAxisConfig
                                 key={field.reference + index}
                                 field={field}
-                                yLayoutOptions={yLayoutOptions}
+                                yLayoutOptions={
+                                    yLayoutOptions.customAggregations
+                                }
                                 isSingle={yAxisFields.length === 1}
                                 index={index}
                                 actions={actions}
                                 columns={columns}
+                                error={errors?.customMetricFieldError?.references.find(
+                                    (reference: string) =>
+                                        reference === field.reference,
+                                )}
                             />
                         ))}
                 </Config.Section>
@@ -286,9 +354,10 @@ export const CartesianChartFieldConfiguration = ({
                         field={groupByField}
                         groupByOptions={groupByLayoutOptions}
                         actions={actions}
+                        error={errors?.groupByFieldError}
                     />
                 </Config.Section>
             </Config>
-        </>
+        </Stack>
     );
 };

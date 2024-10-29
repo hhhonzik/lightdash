@@ -1,7 +1,7 @@
 import {
     DimensionType,
     type ChartKind,
-    type VizChartLayout,
+    type PivotChartLayout,
     type VizColumn,
     type VizIndexLayoutOptions,
     type VizPivotLayoutOptions,
@@ -12,21 +12,22 @@ import { IconX } from '@tabler/icons-react';
 import { useMemo, type FC } from 'react';
 import MantineIcon from '../../../../components/common/MantineIcon';
 import { FieldReferenceSelect } from '../../../../components/DataViz/FieldReferenceSelect';
-import {
-    useVizDispatch,
-    useVizSelector,
-    type CartesianChartActionsType,
-} from '../../../../components/DataViz/store';
+import { type BarChartActionsType } from '../../../../components/DataViz/store/barChartSlice';
+import { type LineChartActionsType } from '../../../../components/DataViz/store/lineChartSlice';
 import { cartesianChartSelectors } from '../../../../components/DataViz/store/selectors';
 import { AddButton } from '../../../../components/VisualizationConfigs/common/AddButton';
 import { Config } from '../../../../components/VisualizationConfigs/common/Config';
+import {
+    useAppDispatch as useVizDispatch,
+    useAppSelector as useVizSelector,
+} from '../../../../features/sqlRunner/store/hooks';
 
 const YFieldsAxisConfig: FC<{
-    field?: VizChartLayout['y'][number];
+    field?: PivotChartLayout['y'][number];
     yLayoutOptions: VizValuesLayoutOptions[];
     isSingle: boolean;
     index: number;
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
     columns: VizColumn[];
 }> = ({ field, yLayoutOptions, isSingle, index, actions, columns }) => {
     const dispatch = useVizDispatch();
@@ -87,12 +88,19 @@ const XFieldAxisConfig = ({
     columns,
 }: {
     columns: VizColumn[];
-
-    field: VizChartLayout['x'] | undefined;
+    field: ReturnType<typeof cartesianChartSelectors.getXAxisField> | undefined;
     xLayoutOptions: VizIndexLayoutOptions[];
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
 }) => {
     const dispatch = useVizDispatch();
+
+    const handleXAxisChange = (value: string | null) => {
+        if (!value) {
+            dispatch(actions.removeXAxisField());
+        } else {
+            dispatch(actions.setXAxisReference(value));
+        }
+    };
 
     return (
         <FieldReferenceSelect
@@ -103,11 +111,7 @@ const XFieldAxisConfig = ({
             }))}
             value={field?.reference ?? null}
             placeholder="Select X axis"
-            onChange={(value) => {
-                if (!value) {
-                    dispatch(actions.removeXAxisField());
-                } else dispatch(actions.setXAxisReference(value));
-            }}
+            onChange={handleXAxisChange}
             error={
                 field?.reference &&
                 xLayoutOptions.find((x) => x.reference === field.reference) ===
@@ -133,7 +137,7 @@ const GroupByFieldAxisConfig = ({
     columns: VizColumn[];
     field: undefined | { reference: string };
     groupByOptions?: VizPivotLayoutOptions[];
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
 }) => {
     const dispatch = useVizDispatch();
     const error =
@@ -194,20 +198,27 @@ export const CartesianVizFieldConfig = ({
 }: {
     selectedChartType: ChartKind;
     columns: VizColumn[];
-
-    actions: CartesianChartActionsType;
+    actions: BarChartActionsType | LineChartActionsType;
 }) => {
     const dispatch = useVizDispatch();
     const xLayoutOptions = useVizSelector((state) =>
         cartesianChartSelectors.getIndexLayoutOptions(state, selectedChartType),
     );
-    const yLayoutOptions = useVizSelector(
-        (state) =>
-            cartesianChartSelectors.getValuesLayoutOptions(
-                state,
-                selectedChartType,
-            ) ?? [],
+    const allValuesLayoutOptions = useVizSelector((state) =>
+        cartesianChartSelectors.getValuesLayoutOptions(
+            state,
+            selectedChartType,
+        ),
     );
+
+    // For now we only support pre-aggregated values in the semantic viewer
+    const yLayoutOptions = useMemo(() => {
+        if (!allValuesLayoutOptions) {
+            return [];
+        }
+        return allValuesLayoutOptions.preAggregated;
+    }, [allValuesLayoutOptions]);
+
     const xAxisField = useVizSelector((state) =>
         cartesianChartSelectors.getXAxisField(state, selectedChartType),
     );

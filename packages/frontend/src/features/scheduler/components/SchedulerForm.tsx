@@ -1,7 +1,10 @@
 import {
+    FeatureFlags,
+    formatMinutesOffset,
     getItemId,
     getMetricsFromItemsMap,
     getTableCalculationsFromItemsMap,
+    getTzMinutesOffset,
     isDashboardScheduler,
     isNumericItem,
     isSchedulerCsvOptions,
@@ -13,6 +16,7 @@ import {
     validateEmail,
     type CreateSchedulerAndTargetsWithoutIds,
     type CreateSchedulerTarget,
+    type Dashboard,
     type ItemsMap,
     type SchedulerAndTargets,
 } from '@lightdash/common';
@@ -48,16 +52,21 @@ import {
     IconSettings,
 } from '@tabler/icons-react';
 import MDEditor, { commands } from '@uiw/react-md-editor';
+import { debounce, intersection, isEqual } from 'lodash';
 import { useCallback, useMemo, useState, type FC } from 'react';
 import FieldSelect from '../../../components/common/FieldSelect';
 import FilterNumberInput from '../../../components/common/Filters/FilterInputs/FilterNumberInput';
 import MantineIcon from '../../../components/common/MantineIcon';
 import { TagInput } from '../../../components/common/TagInput/TagInput';
+import TimeZonePicker from '../../../components/common/TimeZonePicker';
 import { CronInternalInputs } from '../../../components/ReactHookForm/CronInput';
 import { hasRequiredScopes } from '../../../components/UserSettings/SlackSettingsPanel';
 import { useDashboardQuery } from '../../../hooks/dashboard/useDashboard';
 import useHealth from '../../../hooks/health/useHealth';
 import { useGetSlack, useSlackChannels } from '../../../hooks/slack/useSlack';
+import { useActiveProjectUuid } from '../../../hooks/useActiveProject';
+import { useFeatureFlagEnabled } from '../../../hooks/useFeatureFlagEnabled';
+import { useProject } from '../../../hooks/useProject';
 import SlackSvg from '../../../svgs/slack.svg?react';
 import { isInvalidCronExpression } from '../../../utils/fieldValidators';
 import SchedulerFilters from './SchedulerFilters';
@@ -87,6 +96,7 @@ const DEFAULT_VALUES = {
     message: '',
     format: SchedulerFormat.CSV,
     cron: '0 9 * * 1',
+    timezone: undefined,
     options: {
         formatted: Values.FORMATTED,
         limit: Limit.TABLE,
@@ -97,6 +107,7 @@ const DEFAULT_VALUES = {
     slackTargets: [] as string[],
     filters: undefined,
     customViewportWidth: undefined,
+    selectedTabs: undefined,
     thresholds: [],
 };
 
@@ -114,12 +125,31 @@ const DEFAULT_VALUES_ALERT = {
     notificationFrequency: NotificationFrequency.ONCE,
 };
 
+const MAX_SLACK_CHANNELS = 100000;
+
 const thresholdOperatorOptions = [
     { label: 'is greater than', value: ThresholdOperator.GREATER_THAN },
     { label: 'is less than', value: ThresholdOperator.LESS_THAN },
     { label: 'increased by', value: ThresholdOperator.INCREASED_BY },
     { label: 'decreased by', value: ThresholdOperator.DECREASED_BY },
 ];
+
+const getSelectedTabsForDashboardScheduler = (
+    schedulerData: SchedulerAndTargets,
+    isDashboardTabsAvailable: boolean,
+    dashboard: Dashboard | undefined,
+) => {
+    return (
+        isDashboardScheduler(schedulerData) && {
+            selectedTabs: isDashboardTabsAvailable
+                ? intersection(
+                      schedulerData.selectedTabs,
+                      dashboard?.tabs.map((tab) => tab.uuid),
+                  )
+                : undefined, // remove tabs that have been deleted
+        }
+    );
+};
 
 const getFormValuesFromScheduler = (schedulerData: SchedulerAndTargets) => {
     const options = schedulerData.options;
@@ -159,12 +189,14 @@ const getFormValuesFromScheduler = (schedulerData: SchedulerAndTargets) => {
         message: schedulerData.message,
         format: schedulerData.format,
         cron: schedulerData.cron,
+        timezone: schedulerData.timezone,
         options: formOptions,
         emailTargets: emailTargets,
         slackTargets: slackTargets,
         ...(isDashboardScheduler(schedulerData) && {
             filters: schedulerData.filters,
             customViewportWidth: schedulerData.customViewportWidth,
+            selectedTabs: schedulerData.selectedTabs,
         }),
         thresholds: schedulerData.thresholds,
         notificationFrequency: schedulerData.notificationFrequency,
@@ -235,13 +267,39 @@ const SchedulerForm: FC<Props> = ({
     isThresholdAlert,
     itemsMap,
 }) => {
+    const isDashboard = resource && resource.type === 'dashboard';
+    const isDashboardTabsEnabled = useFeatureFlagEnabled(
+        FeatureFlags.DashboardTabs,
+    );
+    const { data: dashboard } = useDashboardQuery(resource?.uuid, {
+        enabled: isDashboard,
+    });
+
+    const isDashboardTabsAvailable =
+        dashboard?.tabs !== undefined && dashboard.tabs.length > 0;
+
+    const { activeProjectUuid } = useActiveProjectUuid();
+    const { data: project } = useProject(activeProjectUuid);
+
     const form = useForm({
         initialValues:
             savedSchedulerData !== undefined
-                ? getFormValuesFromScheduler(savedSchedulerData)
+                ? getFormValuesFromScheduler({
+                      ...savedSchedulerData,
+                      ...getSelectedTabsForDashboardScheduler(
+                          savedSchedulerData,
+                          isDashboardTabsAvailable,
+                          dashboard,
+                      ),
+                  })
                 : isThresholdAlert
                 ? DEFAULT_VALUES_ALERT
-                : DEFAULT_VALUES,
+                : {
+                      ...DEFAULT_VALUES,
+                      selectedTabs: isDashboardTabsAvailable
+                          ? dashboard?.tabs.map((tab) => tab.uuid)
+                          : undefined,
+                  },
         validateInputOnBlur: ['options.customLimit'],
 
         validate: {
@@ -299,11 +357,13 @@ const SchedulerForm: FC<Props> = ({
                 message: values.message,
                 format: values.format,
                 cron: values.cron,
+                timezone: values.timezone,
                 options,
                 targets,
                 ...(resource?.type === 'dashboard' && {
                     filters: values.filters,
                     customViewportWidth: values.customViewportWidth,
+                    selectedTabs: values.selectedTabs,
                 }),
                 thresholds: values.thresholds,
                 enabled: true,
@@ -314,6 +374,14 @@ const SchedulerForm: FC<Props> = ({
             };
         },
     });
+
+    const [allTabsSelected, setAllTabsSelected] = useState(
+        isEqual(
+            dashboard?.tabs.map((tab) => tab.uuid),
+            form.values.selectedTabs,
+        ), // make sure tab ids are identical
+    );
+
     const health = useHealth();
     const [emailValidationError, setEmailValidationError] = useState<
         string | undefined
@@ -328,15 +396,14 @@ const SchedulerForm: FC<Props> = ({
 
     const [showFormatting, setShowFormatting] = useState(false);
 
+    const [search, setSearch] = useState('');
+
+    const debounceSetSearch = debounce((val) => setSearch(val), 500);
+
     const numericMetrics = {
         ...getMetricsFromItemsMap(itemsMap ?? {}, isNumericItem),
         ...getTableCalculationsFromItemsMap(itemsMap),
     };
-
-    const isDashboard = resource && resource.type === 'dashboard';
-    const { data: dashboard } = useDashboardQuery(resource?.uuid, {
-        enabled: isDashboard,
-    });
 
     const { data: slackInstallation, isInitialLoading } = useGetSlack();
     const organizationHasSlack = !!slackInstallation?.organizationUuid;
@@ -349,7 +416,7 @@ const SchedulerForm: FC<Props> = ({
         return SlackStates.SUCCESS;
     }, [isInitialLoading, organizationHasSlack, slackInstallation]);
 
-    const slackChannelsQuery = useSlackChannels({
+    const slackChannelsQuery = useSlackChannels(search, {
         enabled: organizationHasSlack,
     });
 
@@ -372,6 +439,9 @@ const SchedulerForm: FC<Props> = ({
             .concat(privateChannels);
     }, [slackChannelsQuery?.data, privateChannels]);
 
+    let responsiveChannelsSearchEnabled =
+        slackChannels.length >= MAX_SLACK_CHANNELS || search.length > 0; // enable responvive channel search if there are more than MAX_SLACK_CHANNELS defined channels
+
     const handleSendNow = useCallback(() => {
         if (form.isValid()) {
             onSendNow(form.getTransformedValues(form.values));
@@ -388,6 +458,14 @@ const SchedulerForm: FC<Props> = ({
 
     const isThresholdAlertWithNoFields =
         isThresholdAlert && Object.keys(numericMetrics).length === 0;
+
+    const projectDefaultOffsetString = useMemo(() => {
+        if (!project) {
+            return;
+        }
+        const minsOffset = getTzMinutesOffset('UTC', project.schedulerTimezone);
+        return formatMinutesOffset(minsOffset);
+    }, [project]);
 
     return (
         <form onSubmit={form.onSubmit((values) => onSubmit(values))}>
@@ -591,13 +669,28 @@ const SchedulerForm: FC<Props> = ({
                                     />
                                 </Tooltip>
                             )}
-                            <Box>
+                            <Box w="100%">
                                 <CronInternalInputs
                                     disabled={disabled}
                                     {...form.getInputProps('cron')}
                                     value={form.values.cron}
                                     name="cron"
-                                />
+                                >
+                                    <TimeZonePicker
+                                        size="sm"
+                                        style={{ flexGrow: 1 }}
+                                        placeholder={`Project Default ${
+                                            projectDefaultOffsetString
+                                                ? `(UTC ${projectDefaultOffsetString})`
+                                                : ''
+                                        }`}
+                                        maw={350}
+                                        searchable
+                                        clearable
+                                        variant="default"
+                                        {...form.getInputProps('timezone')}
+                                    />
+                                </CronInternalInputs>
                             </Box>
                         </Input.Wrapper>
                         {!isThresholdAlert && (
@@ -770,6 +863,69 @@ const SchedulerForm: FC<Props> = ({
                             </Stack>
                         )}
 
+                        {isDashboardTabsEnabled &&
+                            isDashboardTabsAvailable &&
+                            !isThresholdAlert && (
+                                <Stack spacing={10}>
+                                    <Input.Label>
+                                        Tabs
+                                        <Tooltip
+                                            withinPortal={true}
+                                            maw={400}
+                                            multiline
+                                            label="Select all tabs to include all tabs in the delivery. If you don't select this option, only selected tab will be included in the delivery."
+                                        >
+                                            <MantineIcon
+                                                icon={IconHelpCircle}
+                                                size="md"
+                                                display="inline"
+                                                color="gray"
+                                                style={{
+                                                    marginLeft: '4px',
+                                                    marginBottom: '-4px',
+                                                }}
+                                            />
+                                        </Tooltip>
+                                    </Input.Label>
+                                    <Checkbox
+                                        size="xs"
+                                        label="Include all tabs"
+                                        labelPosition="right"
+                                        checked={allTabsSelected}
+                                        onChange={(e) => {
+                                            setAllTabsSelected((old) => !old);
+                                            form.setFieldValue(
+                                                'selectedTabs',
+                                                e.target.checked
+                                                    ? dashboard?.tabs.map(
+                                                          (tab) => tab.uuid,
+                                                      )
+                                                    : [],
+                                            );
+                                        }}
+                                    />
+                                    {!allTabsSelected && (
+                                        <MultiSelect
+                                            placeholder="Select tabs to include in the delivery"
+                                            value={form.values.selectedTabs}
+                                            data={(dashboard?.tabs || []).map(
+                                                (tab) => ({
+                                                    value: tab.uuid,
+                                                    label: tab.name,
+                                                }),
+                                            )}
+                                            searchable
+                                            onChange={(val) => {
+                                                form.setFieldValue(
+                                                    'selectedTabs',
+                                                    val,
+                                                );
+                                            }}
+                                        />
+                                    )}
+                                </Stack>
+                            )}
+
                         <Input.Wrapper label="Destinations">
                             <Stack mt="sm">
                                 <Group noWrap>
@@ -870,6 +1026,7 @@ const SchedulerForm: FC<Props> = ({
                                                         data={slackChannels}
                                                         searchable
                                                         creatable
+                                                        limit={500}
                                                         withinPortal
                                                         value={
                                                             form.values
@@ -900,6 +1057,17 @@ const SchedulerForm: FC<Props> = ({
                                                                 ],
                                                             );
                                                             return newItem;
+                                                        }}
+                                                        onSearchChange={(
+                                                            val,
+                                                        ) => {
+                                                            if (
+                                                                responsiveChannelsSearchEnabled
+                                                            ) {
+                                                                debounceSetSearch(
+                                                                    val,
+                                                                );
+                                                            }
                                                         }}
                                                         onChange={(val) => {
                                                             form.setFieldValue(

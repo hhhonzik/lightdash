@@ -1,3 +1,4 @@
+import { PartitionType, type PartitionColumn } from '@lightdash/common';
 import {
     ActionIcon,
     Box,
@@ -22,6 +23,7 @@ import {
     IconSearch,
     IconX,
 } from '@tabler/icons-react';
+import dayjs from 'dayjs';
 import { memo, useEffect, useMemo, useState, type FC } from 'react';
 import MantineIcon from '../../../components/common/MantineIcon';
 import { useIsTruncated } from '../../../hooks/useIsTruncated';
@@ -35,10 +37,36 @@ interface TableItemProps extends BoxProps {
     schema: string;
     database: string;
     isActive: boolean;
+    partitionColumn: PartitionColumn | undefined;
 }
 
+const partitionFilter = (partitionColumn: PartitionColumn | undefined) => {
+    if (partitionColumn) {
+        const hint =
+            partitionColumn.partitionType === PartitionType.DATE
+                ? `This table has a date partition on this field`
+                : `This table has a range partition on this field`;
+
+        const defaultValue =
+            partitionColumn.partitionType === PartitionType.DATE
+                ? `'${dayjs().format('YYYY-MM-DD')}'` // Default to today's date
+                : `0`;
+
+        return `\nWHERE ${partitionColumn.field} = ${defaultValue} -- ${hint}`;
+    }
+    return '';
+};
+
 const TableItem: FC<TableItemProps> = memo(
-    ({ table, search, schema, database, isActive, ...rest }) => {
+    ({
+        table,
+        search,
+        schema,
+        database,
+        isActive,
+        partitionColumn,
+        ...rest
+    }) => {
         const { ref: hoverRef, hovered } = useHover();
         const { ref: truncatedRef, isTruncated } =
             useIsTruncated<HTMLDivElement>();
@@ -51,7 +79,13 @@ const TableItem: FC<TableItemProps> = memo(
                 <UnstyledButton
                     onClick={() => {
                         if (!sql || sql.match(/SELECT \* FROM (.+)/)) {
-                            dispatch(setSql(`SELECT * FROM ${quotedTable}`));
+                            dispatch(
+                                setSql(
+                                    `SELECT * FROM ${quotedTable} ${partitionFilter(
+                                        partitionColumn,
+                                    )}`,
+                                ),
+                            );
                         }
 
                         dispatch(toggleActiveTable({ table, schema }));
@@ -106,13 +140,24 @@ const TableItem: FC<TableItemProps> = memo(
                 >
                     <CopyButton value={`${quotedTable}`}>
                         {({ copied, copy }) => (
-                            <ActionIcon size={16} onClick={copy} bg="gray.1">
-                                <MantineIcon
-                                    icon={IconCopy}
-                                    color={copied ? 'green' : 'blue'}
+                            <Tooltip
+                                variant="xs"
+                                label={copied ? 'Copied to clipboard' : 'Copy'}
+                                withArrow
+                                position="right"
+                            >
+                                <ActionIcon
+                                    size={16}
                                     onClick={copy}
-                                />
-                            </ActionIcon>
+                                    bg="gray.1"
+                                >
+                                    <MantineIcon
+                                        icon={IconCopy}
+                                        color={copied ? 'green' : 'blue'}
+                                        onClick={copy}
+                                    />
+                                </ActionIcon>
+                            </Tooltip>
                         )}
                     </CopyButton>
                 </Box>
@@ -184,6 +229,7 @@ const Table: FC<{
                         table={table}
                         schema={`${schema}`}
                         database={database}
+                        partitionColumn={tables[table].partitionColumn}
                         ml="sm"
                     />
                 ))}
@@ -211,40 +257,44 @@ export const Tables: FC = () => {
 
     return (
         <>
-            <TextInput
-                size="xs"
-                disabled={!data && !debouncedSearch}
-                icon={
-                    isLoading ? (
-                        <Loader size="xs" />
-                    ) : (
-                        <MantineIcon icon={IconSearch} />
-                    )
-                }
-                rightSection={
-                    search ? (
-                        <ActionIcon size="xs" onClick={() => setSearch('')}>
-                            <MantineIcon icon={IconX} />
-                        </ActionIcon>
-                    ) : null
-                }
-                placeholder="Search tables"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                styles={(theme) => ({
-                    input: {
-                        borderRadius: theme.radius.md,
-                        border: `1px solid ${theme.colors.gray[3]}`,
-                    },
-                })}
-            />
+            <Box px="sm">
+                <TextInput
+                    size="xs"
+                    disabled={!data && !debouncedSearch}
+                    icon={
+                        isLoading ? (
+                            <Loader size="xs" />
+                        ) : (
+                            <MantineIcon icon={IconSearch} />
+                        )
+                    }
+                    rightSection={
+                        search ? (
+                            <ActionIcon size="xs" onClick={() => setSearch('')}>
+                                <MantineIcon icon={IconX} />
+                            </ActionIcon>
+                        ) : null
+                    }
+                    placeholder="Search tables"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    styles={(theme) => ({
+                        input: {
+                            borderRadius: theme.radius.md,
+                            border: `1px solid ${theme.colors.gray[3]}`,
+                        },
+                    })}
+                />
+            </Box>
 
             <ScrollArea
                 offsetScrollbars
                 variant="primary"
                 className="only-vertical"
+                pl="sm"
                 sx={{ flex: 1 }}
                 type="auto"
+                scrollbarSize={8}
             >
                 {isSuccess &&
                     data &&

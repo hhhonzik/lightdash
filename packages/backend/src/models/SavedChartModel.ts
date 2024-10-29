@@ -35,7 +35,11 @@ import {
 import * as Sentry from '@sentry/node';
 import { Knex } from 'knex';
 import { LightdashConfig } from '../config/parseConfig';
-import { DashboardsTableName } from '../database/entities/dashboards';
+import {
+    DashboardsTableName,
+    DashboardTileChartTableName,
+    DashboardVersionsTableName,
+} from '../database/entities/dashboards';
 import { OrganizationTableName } from '../database/entities/organizations';
 import {
     PinnedChartTableName,
@@ -59,6 +63,7 @@ import {
 } from '../database/entities/savedCharts';
 import { SpaceTableName } from '../database/entities/spaces';
 import { UserTableName } from '../database/entities/users';
+import { generateUniqueSlug } from '../utils/SlugUtils';
 import { SpaceModel } from './SpaceModel';
 
 type DbSavedChartDetails = {
@@ -332,7 +337,7 @@ export const createSavedChart = async (
                 getChartKind(chartConfig.type, chartConfig.config) ||
                 ChartKind.VERTICAL_BAR,
             last_version_updated_by_user_uuid: userUuid,
-            slug,
+            slug: await generateUniqueSlug(trx, SavedChartsTableName, slug),
         };
         if (dashboardUuid) {
             chart = {
@@ -1107,6 +1112,7 @@ export class SavedChartModel {
         spaceUuids?: string[];
         slug?: string;
         exploreName?: string;
+        excludeChartsSavedInDashboard?: boolean;
     }): Promise<(ChartSummary & { updatedAt: Date })[]> {
         return Sentry.startSpan(
             {
@@ -1121,10 +1127,64 @@ export class SavedChartModel {
                         filters.projectUuid,
                     );
                 }
-                if (filters.spaceUuids) {
+
+                if (filters.excludeChartsSavedInDashboard) {
+                    void query.whereNotNull(`${SavedChartsTableName}.space_id`); // Note: charts saved in dashboards have saved_queries.space_id = null
+                } else {
+                    // Get charts not saved in a dashboard OR the charts saved a dashboard AND used in the latest dashboard version
                     void query
-                        .whereNotNull(`${SavedChartsTableName}.space_id`)
-                        .whereIn('spaces.space_uuid', filters.spaceUuids);
+                        .leftJoin(
+                            DashboardVersionsTableName,
+                            `${DashboardVersionsTableName}.dashboard_id`,
+                            '=',
+                            `${DashboardsTableName}.dashboard_id`,
+                        )
+                        .leftJoin(
+                            DashboardTileChartTableName,
+                            function chartsJoin() {
+                                this.on(
+                                    `${DashboardTileChartTableName}.dashboard_version_id`,
+                                    '=',
+                                    `${DashboardVersionsTableName}.dashboard_version_id`,
+                                );
+                                this.andOn(
+                                    `${DashboardTileChartTableName}.saved_chart_id`,
+                                    '=',
+                                    `${SavedChartsTableName}.saved_query_id`,
+                                );
+                            },
+                        )
+                        .where((whereBuilder) => {
+                            void whereBuilder
+                                .whereNull(
+                                    `${DashboardsTableName}.dashboard_id`,
+                                )
+                                .orWhere((orWhereBuilder) => {
+                                    void orWhereBuilder
+                                        .whereNotNull(
+                                            `${DashboardTileChartTableName}.saved_chart_id`,
+                                        )
+                                        .andWhere(
+                                            `${DashboardVersionsTableName}.created_at`,
+                                            '=',
+                                            this.database
+                                                .from(
+                                                    DashboardVersionsTableName,
+                                                )
+                                                .max('created_at')
+                                                .where(
+                                                    `${DashboardVersionsTableName}.dashboard_id`,
+                                                    this.database.ref(
+                                                        `${DashboardsTableName}.dashboard_id`,
+                                                    ),
+                                                ),
+                                        );
+                                });
+                        });
+                }
+
+                if (filters.spaceUuids) {
+                    void query.whereIn('spaces.space_uuid', filters.spaceUuids);
                 }
                 if (filters.slug) {
                     void query.where('saved_queries.slug', filters.slug);

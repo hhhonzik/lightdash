@@ -2,29 +2,26 @@ import {
     isApiSqlRunnerJobErrorResponse,
     isApiSqlRunnerJobSuccessResponse,
     isErrorDetails,
-    type ApiError,
     type ApiJobScheduledResponse,
 } from '@lightdash/common';
-import { useQuery } from '@tanstack/react-query';
 import { lightdashApi } from '../../../api';
 import { getSqlRunnerCompleteJob } from './requestUtils';
-import { useResultsFromStreamWorker } from './useResultsFromStreamWorker';
-import { type ResultsAndColumns } from './useSqlQueryRun';
+import { type useResultsFromStreamWorker } from './useResultsFromStreamWorker';
 
-export const getSqlChartResults = async ({
-    projectUuid,
-    slug,
+const getSqlChartResults = async ({
+    url,
     getResultsFromStream,
+    context,
 }: {
-    projectUuid: string;
-    slug: string;
+    url: string;
     getResultsFromStream: ReturnType<
         typeof useResultsFromStreamWorker
     >['getResultsFromStream'];
+    context: string | undefined;
 }) => {
     const scheduledJob = await lightdashApi<ApiJobScheduledResponse['results']>(
         {
-            url: `/projects/${projectUuid}/sqlRunner/saved/slug/${slug}/results-job`,
+            url: `${url}${context ? `?context=${context}` : ''}`,
             method: 'GET',
             body: undefined,
         },
@@ -34,16 +31,16 @@ export const getSqlChartResults = async ({
     if (isApiSqlRunnerJobErrorResponse(job)) {
         throw job;
     }
-    const url =
+    const fileUrl =
         isApiSqlRunnerJobSuccessResponse(job) &&
         job?.details &&
         !isErrorDetails(job.details)
             ? job.details.fileUrl
             : undefined;
-    const results = await getResultsFromStream(url);
+    const results = await getResultsFromStream(fileUrl);
 
     return {
-        url: url!,
+        fileUrl: fileUrl!,
         results,
         columns:
             isApiSqlRunnerJobSuccessResponse(job) &&
@@ -54,32 +51,22 @@ export const getSqlChartResults = async ({
     };
 };
 
-/**
- * Fetches the chart and results of a SQL query from the SQL runner.
- * This is a hook that is used to get the results of a saved SQL query - used when viewing a saved SQL query in the SQL runner
- * @param projectUuid - The UUID of the project.
- * @param slug - The slug of the SQL query.
- * @returns The results of the SQL query
- */
-export const useSqlChartResults = (
-    projectUuid: string,
-    slug: string | undefined,
-) => {
-    const { getResultsFromStream } = useResultsFromStreamWorker();
-    return useQuery<
-        (ResultsAndColumns & { url: string }) | undefined,
-        ApiError
-    >(
-        ['sqlChartResults', projectUuid, slug],
-        () => {
-            return getSqlChartResults({
-                projectUuid,
-                slug: slug!,
-                getResultsFromStream,
-            });
-        },
-        {
-            enabled: Boolean(slug),
-        },
-    );
+export const getSqlChartResultsByUuid = async ({
+    projectUuid,
+    chartUuid,
+    getResultsFromStream,
+    context,
+}: {
+    projectUuid: string;
+    chartUuid: string;
+    getResultsFromStream: Parameters<
+        typeof getSqlChartResults
+    >[0]['getResultsFromStream'];
+    context: Parameters<typeof getSqlChartResults>[0]['context'];
+}) => {
+    return getSqlChartResults({
+        url: `/projects/${projectUuid}/sqlRunner/saved/${chartUuid}/results-job`,
+        getResultsFromStream,
+        context,
+    });
 };

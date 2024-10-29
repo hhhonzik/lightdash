@@ -114,6 +114,7 @@ export type SchedulerBase = {
     createdBy: string;
     format: SchedulerFormat;
     cron: string;
+    timezone?: string;
     savedChartUuid: string | null;
     dashboardUuid: string | null;
     options: SchedulerOptions;
@@ -140,6 +141,7 @@ export type DashboardScheduler = SchedulerBase & {
     dashboardUuid: string;
     filters?: SchedulerFilterRule[];
     customViewportWidth?: number;
+    selectedTabs?: string[];
 };
 
 export type Scheduler = ChartScheduler | DashboardScheduler;
@@ -208,6 +210,7 @@ export type UpdateSchedulerAndTargets = Pick<
     | 'name'
     | 'message'
     | 'cron'
+    | 'timezone'
     | 'format'
     | 'options'
     | 'thresholds'
@@ -387,6 +390,7 @@ export type DownloadCsvPayload = {
     customLabels: Record<string, string> | undefined;
     hiddenFields: string[] | undefined;
     chartName: string | undefined;
+    fromSavedChart: boolean;
 };
 
 export type ApiCsvUrlResponse = {
@@ -430,3 +434,5 @@ export type ApiJobStatusResponse = {
         details: Record<string, any> | null;
     };
 };
+
+export type SchedulerCronUpdate = { schedulerUuid: string; cron: string };

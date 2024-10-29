@@ -34,8 +34,8 @@ export enum PageName {
     SAVED_DASHBOARDS = 'saved_dashboards',
     DASHBOARD = 'DASHBOARD',
     SQL_RUNNER = 'SQL_RUNNER',
-    SEMANTIC_VIEWER = 'SEMANTIC_VIEWER',
-    METRIC_FLOW = 'METRIC_FLOW',
+    SEMANTIC_VIEWER_VIEW = 'SEMANTIC_VIEWER_VIEW',
+    SEMANTIC_VIEWER_EDIT = 'SEMANTIC_VIEWER_EDIT',
     SOCIAL_LOGIN_SETTINGS = 'social_login_settings',
     APPEARANCE = 'appearance_settings',
     ACCESS_TOKENS = 'access_tokens',
@@ -48,6 +48,7 @@ export enum PageName {
     VERIFY_EMAIL = 'verify_email',
     JOIN_ORGANIZATION = 'join_organization',
     CATALOG = 'catalog',
+    METRICS_CATALOG = 'metrics_catalog',
 }
 
 export enum CategoryName {

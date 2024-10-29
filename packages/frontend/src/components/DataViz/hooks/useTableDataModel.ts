@@ -1,9 +1,8 @@
 import {
-    ChartKind,
     TableDataModel,
+    type IResultsRunner,
     type RawResultRow,
     type VizTableColumnsConfig,
-    type VizTableConfig,
 } from '@lightdash/common';
 import {
     getCoreRowModel,
@@ -14,30 +13,20 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useMemo, useRef } from 'react';
 import { getValueCell } from '../../../hooks/useColumns';
 import { ROW_HEIGHT_PX } from '../../common/Table/Table.styles';
-import { type ResultsRunner } from '../transformers/ResultsRunner';
 
-export const useTableDataModel = <T extends ResultsRunner>({
+// TODO: this name could change or we could replace this with useVirtualTable.
+// It's not really clear what is doing with the table data model for a consumer.
+export const useTableDataModel = ({
     config,
     resultsRunner,
 }: {
     config: VizTableColumnsConfig | undefined;
-    resultsRunner: T;
+    resultsRunner: IResultsRunner;
 }) => {
     const tableModel = useMemo(() => {
-        // TODO: currently usage of this hook relies just on columns, change to rely on full config so we don't have to create a dummy config
-        const tableConfig: VizTableConfig | undefined = config
-            ? {
-                  type: ChartKind.TABLE,
-                  metadata: {
-                      version: 1,
-                  },
-                  columns: config?.columns ?? {},
-              }
-            : undefined;
-
         return new TableDataModel({
             resultsRunner,
-            config: tableConfig,
+            columnsConfig: config?.columns,
         });
     }, [resultsRunner, config]);
 
@@ -50,11 +39,11 @@ export const useTableDataModel = <T extends ResultsRunner>({
             // react table has a bug with accessors that has dots in them
             // we found the fix here -> https://github.com/TanStack/table/issues/1671
             // do not remove the line below
-            accessorFn: resultsRunner.getColumnsAccessorFn(column),
+            accessorFn: TableDataModel.getColumnsAccessorFn(column),
             header: config?.columns[column].label || column,
             cell: getValueCell,
         }));
-    }, [columns, config?.columns, resultsRunner]);
+    }, [columns, config?.columns]);
 
     const table = useReactTable({
         data: rows,

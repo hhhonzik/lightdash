@@ -25,12 +25,16 @@ export enum FeatureFlags {
     /** Enable dashboard tabs */
     DashboardTabs = 'dashboard_tabs',
 
-    /**
-     * Disable https://docs.snowflake.com/en/sql-reference/parameters#label-quoted-identifiers-ignore-case
-     * for the Snowflake warehouse client
-     */
-    DisableSnowflakeQuotedIdentifiersIgnoreCase = 'disable-snowflake-quoted-identifiers-ignore-case',
-
     /* Send local timezone to the warehouse session */
     EnableUserTimezones = 'enable-user-timezones',
+
+    /**
+     * Enable the semantic layer
+     */
+    SemanticLayerEnabled = 'semantic-layer-enabled',
+
+    /**
+     * Enable dashboard comments
+     */
+    DashboardComments = 'dashboard-comments-enabled',
 }
