@@ -136,6 +136,9 @@ export const lightdashConfigMock: LightdashConfig = {
     staticIp: '',
     trustProxy: false,
     mode: LightdashMode.DEFAULT,
+    license: {
+        licenseKey: null,
+    },
     groups: {
         enabled: false,
     },
@@ -149,6 +152,17 @@ export const lightdashConfigMock: LightdashConfig = {
         defaultLimit: 500,
         csvCellsLimit: 100000,
         timezone: undefined,
+    },
+    ai: {
+        copilot: {
+            enabled: false,
+        },
+    },
+    embedding: {
+        enabled: false,
+    },
+    scim: {
+        enabled: false,
     },
     security: {
         contentSecurityPolicy: {

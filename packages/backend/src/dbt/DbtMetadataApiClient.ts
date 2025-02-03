@@ -1,4 +1,5 @@
 import {
+    AnyType,
     DbtError,
     DbtModelNode,
     DbtRpcGetManifestResults,
@@ -43,7 +44,7 @@ type DbtCloudEnvironmentResponse = {
                         uniqueId: string;
                         name: string;
                         description: string;
-                        meta: any;
+                        meta: AnyType;
                         tags: string[];
                         filePath: string;
                         database: string;
@@ -64,13 +65,13 @@ type DbtCloudEnvironmentResponse = {
                         releaseVersion: string;
                         contractEnforced: boolean;
                         patchPath: string;
-                        config: any;
+                        config: AnyType;
                         catalog: {
                             columns: {
                                 name: string;
                                 description: string;
                                 type: string;
-                                meta: any;
+                                meta: AnyType;
                             };
                         };
                     };
@@ -153,6 +154,8 @@ export class DbtMetadataApiClient implements DbtClient {
 
     private readonly environmentId: string | number;
 
+    private readonly tags: string[] | undefined;
+
     private readonly endpoint: URL;
 
     private readonly client: GraphQLClient;
@@ -161,10 +164,12 @@ export class DbtMetadataApiClient implements DbtClient {
         environmentId,
         discoveryApiEndpoint,
         bearerToken,
+        tags,
     }: {
         environmentId: string | number;
         bearerToken: string;
         discoveryApiEndpoint: string | undefined;
+        tags: string[] | undefined;
     }) {
         this.environmentId = environmentId;
         this.bearerToken = bearerToken;
@@ -178,9 +183,10 @@ export class DbtMetadataApiClient implements DbtClient {
                 'X-dbt-partner-source': 'lightdash',
             },
         });
+        this.tags = tags;
     }
 
-    static parseError(e: any): DbtError {
+    static parseError(e: AnyType): DbtError {
         const errors: string[] | undefined = e?.response?.errors?.map(
             (innerError: { message: string }) => {
                 if (
@@ -200,6 +206,11 @@ export class DbtMetadataApiClient implements DbtClient {
         );
     }
 
+    /* eslint-disable-next-line class-methods-use-this */
+    getSelector(): string | undefined {
+        return undefined;
+    }
+
     private async getModels(
         prevResponse?: DbtCloudEnvironmentResponse,
     ): Promise<DbtCloudEnvironmentResponse> {
@@ -212,6 +223,7 @@ export class DbtMetadataApiClient implements DbtClient {
                     .endCursor,
                 filter: {
                     lastRunStatus: 'success',
+                    tags: this.tags,
                 },
             },
         );
@@ -272,7 +284,7 @@ export class DbtMetadataApiClient implements DbtClient {
                             columns: Object.values(
                                 node.catalog?.columns || [],
                             ).reduce<DbtModelNode['columns']>(
-                                (acc, column: any) => {
+                                (acc, column: AnyType) => {
                                     acc[column.name] = {
                                         name: column.name,
                                         description: column.description,

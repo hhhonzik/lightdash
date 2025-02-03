@@ -1,4 +1,8 @@
-import { type CatalogField, type Tag } from '@lightdash/common';
+import {
+    getErrorMessage,
+    type CatalogField,
+    type Tag,
+} from '@lightdash/common';
 import {
     Box,
     Button,
@@ -38,6 +42,10 @@ type Props = {
     opened: boolean;
     onClose?: () => void;
 };
+
+const isCategoryDefinedInUI = (
+    category: CatalogField['categories'][number] | undefined,
+) => category?.yamlReference === null;
 
 export const MetricsCatalogCategoryForm: FC<Props> = memo(
     ({ catalogSearchUuid, metricCategories, opened, onClose }) => {
@@ -119,7 +127,9 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                     });
                 } catch (error) {
                     // TODO: Add toast on error
-                    console.error('Error adding tag:', error);
+                    console.error(
+                        `Error adding tag: ${getErrorMessage(error)}`,
+                    );
                 }
             },
             [
@@ -146,7 +156,9 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                         tagUuid,
                     });
                 } catch (error) {
-                    console.error('Error removing tag', error);
+                    console.error(
+                        `Error removing tag: ${getErrorMessage(error)}`,
+                    );
                 }
             },
             [projectUuid, untagCatalogItemMutation, catalogSearchUuid],
@@ -156,8 +168,13 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
         // Returns categories whose names match the search term (case insensitive)
         const filteredExistingCategories = useMemo(
             () =>
-                filter(metricCategories, (category) =>
-                    includes(category.name.toLowerCase(), search.toLowerCase()),
+                filter(
+                    metricCategories,
+                    (category) =>
+                        includes(
+                            category.name.toLowerCase(),
+                            search.toLowerCase(),
+                        ) && isCategoryDefinedInUI(category),
                 ),
             [metricCategories, search],
         );
@@ -173,7 +190,7 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                         includes(
                             category.name.toLowerCase(),
                             search.toLowerCase(),
-                        ),
+                        ) && isCategoryDefinedInUI(category),
                 ),
             [tags, search, metricCategories],
         );
@@ -185,28 +202,32 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
             }: {
                 value: Tag['tagUuid'];
                 onRemove: (value: Tag['tagUuid']) => void;
-            }) => (
-                <Box mx={2}>
-                    <CatalogCategory
-                        category={{
-                            name: value,
-                            color:
-                                metricCategories.find(
-                                    (category) => category.name === value,
-                                )?.color ?? getRandomColor(),
-                        }}
-                        onRemove={() => {
-                            onRemove(value);
-                            const tagUuid = metricCategories.find(
-                                (category) => category.name === value,
-                            )?.tagUuid;
-                            if (tagUuid) {
-                                void handleUntag(tagUuid);
-                            }
-                        }}
-                    />
-                </Box>
-            ),
+            }) => {
+                const category = metricCategories.find((c) => c.name === value);
+                const canEdit = isCategoryDefinedInUI(category);
+
+                return (
+                    <Box mx={2}>
+                        <CatalogCategory
+                            category={{
+                                name: value,
+                                color: category?.color ?? getRandomColor(),
+                                yamlReference: category?.yamlReference ?? null,
+                            }}
+                            showYamlIcon={!canEdit}
+                            {...(canEdit && {
+                                onRemove: () => {
+                                    onRemove(value);
+                                    const tagUuid = category?.tagUuid;
+                                    if (tagUuid) {
+                                        void handleUntag(tagUuid);
+                                    }
+                                },
+                            })}
+                        />
+                    </Box>
+                );
+            },
             [metricCategories, handleUntag],
         );
 
@@ -267,6 +288,9 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                                     fontWeight: 500,
                                     color: theme.colors.dark[9],
                                 },
+                                tagInputContainer: {
+                                    padding: `${theme.spacing.xxs}px ${theme.spacing.xs}px`,
+                                },
                                 wrapper: {
                                     borderRadius: theme.radius.md,
                                     backgroundColor: 'transparent',
@@ -295,6 +319,7 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                                     key={category.tagUuid}
                                     category={category}
                                     onSubPopoverChange={setHasOpenSubPopover}
+                                    canEdit={category.yamlReference === null}
                                 />
                             ))}
                             {filteredAvailableCategories?.map((category) => (
@@ -303,6 +328,7 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                                     category={category}
                                     onClick={() => handleAddTag(category.name)}
                                     onSubPopoverChange={setHasOpenSubPopover}
+                                    canEdit={category.yamlReference === null}
                                 />
                             ))}
                         </Stack>
@@ -327,6 +353,7 @@ export const MetricsCatalogCategoryForm: FC<Props> = memo(
                                             category={{
                                                 name: search,
                                                 color: tagColor,
+                                                yamlReference: null,
                                             }}
                                         />
                                     )}

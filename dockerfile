@@ -6,7 +6,7 @@ FROM node:20-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable pnpm
-RUN corepack prepare pnpm@latest --activate
+RUN corepack prepare pnpm@9.15.4 --activate
 RUN pnpm config set store-dir /pnpm/store
 
 WORKDIR /usr/app
@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     unzip \
     git \
+    libcairo2-dev \
+    libpango1.0-dev \
+    librsvg2-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -207,7 +210,7 @@ FROM node:20-bookworm-slim as prod
 ENV NODE_ENV production
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable pnpm
-RUN corepack prepare pnpm@latest --activate
+RUN corepack prepare pnpm@9.15.4 --activate
 RUN pnpm config set store-dir /pnpm/store
 
 WORKDIR /usr/app
@@ -217,6 +220,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-psycopg2 \
     python3-venv \
     git \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    librsvg2-dev \
     dumb-init \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
