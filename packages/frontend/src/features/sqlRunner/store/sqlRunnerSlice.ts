@@ -79,8 +79,6 @@ export const compareSqlQueries = (
     );
 };
 
-export const DEFAULT_NAME = 'Untitled SQL Query';
-
 export interface SqlRunnerState {
     projectUuid: string;
     activeTable: string | undefined;
@@ -120,6 +118,7 @@ export interface SqlRunnerState {
             isOpen: boolean;
         };
     };
+    isLeftSidebarOpen: boolean;
     quoteChar: string;
     warehouseConnectionType: WarehouseTypes | undefined;
     sqlColumns: VizColumn[] | undefined;
@@ -132,7 +131,7 @@ export interface SqlRunnerState {
     editorHighlightError: MonacoHighlightChar | undefined;
 }
 
-const initialState: SqlRunnerState = {
+export const initialState: SqlRunnerState = {
     mode: 'default',
     projectUuid: '',
     activeTable: undefined,
@@ -172,11 +171,12 @@ const initialState: SqlRunnerState = {
             isOpen: false,
         },
     },
+    isLeftSidebarOpen: true,
     quoteChar: '"',
     warehouseConnectionType: undefined,
     sqlColumns: undefined,
     sqlRows: undefined,
-    activeConfigs: [ChartKind.VERTICAL_BAR],
+    activeConfigs: [ChartKind.TABLE, ChartKind.VERTICAL_BAR],
     fetchResultsOnLoad: false,
     queryIsLoading: false,
     queryError: undefined,
@@ -214,6 +214,9 @@ export const sqlRunnerSlice = createSlice({
     },
     reducers: {
         resetState: () => initialState,
+        setState: (state, action: PayloadAction<typeof initialState>) => {
+            return action.payload;
+        },
         setProjectUuid: (state, action: PayloadAction<string>) => {
             state.projectUuid = action.payload;
         },
@@ -265,8 +268,12 @@ export const sqlRunnerSlice = createSlice({
             }
             if (action.payload === EditorTabs.VISUALIZATION) {
                 state.activeSidebarTab = SidebarTabs.VISUALIZATION;
-                if (state.selectedChartType === undefined) {
+                if (!state.selectedChartType) {
                     state.selectedChartType = ChartKind.VERTICAL_BAR;
+                }
+                // Show the sidebar when switching to the chart tab
+                if (!state.isLeftSidebarOpen) {
+                    state.isLeftSidebarOpen = true;
                 }
             }
             if (action.payload === EditorTabs.SQL) {
@@ -306,6 +313,9 @@ export const sqlRunnerSlice = createSlice({
         ) => {
             state.modals[action.payload].isOpen =
                 !state.modals[action.payload].isOpen;
+        },
+        setSidebarOpen: (state, action: PayloadAction<boolean>) => {
+            state.isLeftSidebarOpen = action.payload;
         },
         setQuoteChar: (state, action: PayloadAction<string>) => {
             state.quoteChar = action.payload;
@@ -413,11 +423,13 @@ export const {
     setSavedChartData,
     setSelectedChartType,
     toggleModal,
+    setSidebarOpen,
     resetState,
     setQuoteChar,
     setWarehouseConnectionType,
     setMode,
     setEditorHighlightError,
+    setState,
 } = sqlRunnerSlice.actions;
 
 export const {

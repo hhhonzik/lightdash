@@ -177,18 +177,22 @@ export const findAndUpdateModelYaml = async ({
         );
         filenames.push(expectedYamlPath);
     }
-    const defaultYmlPath = path.join(
-        path.dirname(
-            path.join(
-                packageName === projectName
-                    ? '.'
-                    : path.join('dbt_packages', packageName),
-                model.originalFilePath,
-            ),
+    const outputDir = path.dirname(
+        path.join(
+            packageName === projectName
+                ? '.'
+                : path.join('dbt_packages', packageName),
+            model.originalFilePath,
         ),
+    );
+    const outputFilePath = path.join(
+        projectDir,
+        outputDir,
         `${model.name}.yml`,
     );
-    filenames.push(defaultYmlPath);
+
+    filenames.push(outputFilePath);
+
     const match = await searchForModel({
         modelName: model.name,
         filenames,
@@ -294,9 +298,10 @@ export const findAndUpdateModelYaml = async ({
         version: 2 as const,
         models: [generatedModel],
     };
+
     return {
         updatedYml,
-        outputFilePath: defaultYmlPath,
+        outputFilePath,
     };
 };
 
@@ -330,8 +335,8 @@ export const getCompiledModels = async (
     args: {
         select: string[] | undefined;
         exclude: string[] | undefined;
-        projectDir: string;
-        profilesDir: string;
+        projectDir: string | undefined;
+        profilesDir: string | undefined;
         target: string | undefined;
         profile: string | undefined;
         vars: string | undefined;
@@ -344,10 +349,10 @@ export const getCompiledModels = async (
         try {
             const { stdout } = await execa('dbt', [
                 'ls',
-                '--profiles-dir',
-                args.profilesDir,
-                '--project-dir',
-                args.projectDir,
+                ...(args.projectDir ? ['--project-dir', args.projectDir] : []),
+                ...(args.profilesDir
+                    ? ['--profiles-dir', args.profilesDir]
+                    : []),
                 ...(args.target ? ['--target', args.target] : []),
                 ...(args.profile ? ['--profile', args.profile] : []),
                 ...(args.select ? ['--select', args.select.join(' ')] : []),
@@ -356,15 +361,19 @@ export const getCompiledModels = async (
                 '--resource-type=model',
                 '--output=json',
             ]);
-
             const filteredModelIds = stdout
                 .split('\n')
                 .map((l) => l.trim())
                 .filter((l) => l.length > 0)
                 .map((l) => {
                     try {
-                        return JSON.parse(l);
-                    } catch (e) {
+                        // remove prefixed time in dbt cloud cli output
+                        const lineWithoutPrefixedTime = l.replace(
+                            /^\d{2}:\d{2}:\d{2}\s*/,
+                            '',
+                        );
+                        return JSON.parse(lineWithoutPrefixedTime);
+                    } catch {
                         return null;
                     }
                 })

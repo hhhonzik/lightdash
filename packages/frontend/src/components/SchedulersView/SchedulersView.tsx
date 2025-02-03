@@ -7,7 +7,7 @@ import {
 } from '@lightdash/common';
 import { Anchor, Box, Group, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { useCallback, useMemo, type FC } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useGetSlack, useSlackChannels } from '../../hooks/slack/useSlack';
 import { useTableStyles } from '../../hooks/styles/useTableStyles';
 import { useProject } from '../../hooks/useProject';
@@ -285,7 +285,7 @@ const Schedulers: FC<SchedulersProps> = ({
                                   <Text fz="xs" color="gray.6">
                                       {getHumanReadableCronExpression(
                                           item.cron,
-                                          item.timezone ??
+                                          item.timezone ||
                                               project.schedulerTimezone,
                                       )}
                                   </Text>
@@ -322,7 +322,9 @@ const Schedulers: FC<SchedulersProps> = ({
                               return (
                                   <Box
                                       component="div"
-                                      onClick={(e) => {
+                                      onClick={(
+                                          e: React.MouseEvent<HTMLDivElement>,
+                                      ) => {
                                           e.stopPropagation();
                                           e.preventDefault();
                                       }}

@@ -38,3 +38,8 @@ export enum FeatureFlags {
      */
     DashboardComments = 'dashboard-comments-enabled',
 }
+
+export type FeatureFlag = {
+    id: string;
+    enabled: boolean;
+};

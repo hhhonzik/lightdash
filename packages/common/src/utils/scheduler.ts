@@ -25,6 +25,20 @@ export function formatMinutesOffset(offsetMins: number) {
     return `${sign}${paddedHours}:${paddedMinutes}`;
 }
 
+export function getTimezoneLabel(timezone: string | undefined) {
+    if (timezone === undefined) return undefined;
+
+    const minsOffset = getTzMinutesOffset('UTC', timezone);
+    const offsetString = formatMinutesOffset(minsOffset);
+    const keyWithNoUnderscores = timezone.replaceAll('_', ' ');
+
+    const labelText =
+        timezone === 'UTC'
+            ? keyWithNoUnderscores
+            : `(UTC ${offsetString}) ${keyWithNoUnderscores}`;
+    return labelText;
+}
+
 export function getHumanReadableCronExpression(
     cronExpression: string,
     timezone: string,
@@ -69,4 +83,15 @@ export function isValidFrequency(cronExpression: string): boolean {
     }
 
     return true;
+}
+
+export function isValidTimezone(timezone: string | undefined): boolean {
+    if (timezone === undefined) return true;
+
+    try {
+        Intl.DateTimeFormat('en-US', { timeZone: timezone });
+        return true;
+    } catch (e) {
+        return false;
+    }
 }

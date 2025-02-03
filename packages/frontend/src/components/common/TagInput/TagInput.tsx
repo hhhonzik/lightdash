@@ -221,8 +221,8 @@ export const TagInput = forwardRef<HTMLInputElement, TagInputProps>(
         );
         const { systemStyles, rest } = extractSystemStyles(others);
 
-        const inputRef = useRef<HTMLInputElement>();
-        const wrapperRef = useRef<HTMLDivElement>();
+        const inputRef = useRef<HTMLInputElement | null>(null);
+        const wrapperRef = useRef<HTMLDivElement | null>(null);
         const uuid = useId(id);
         const [IMEOpen, setIMEOpen] = useState(false);
 
@@ -430,7 +430,9 @@ export const TagInput = forwardRef<HTMLInputElement, TagInputProps>(
         const handlePaste = (e: React.ClipboardEvent): void => {
             e.preventDefault();
             const data = getClipboardData(e);
-            const tags = splitTags(splitChars, data);
+            // When pasting from excel/gsheets, we want to convert \n (columns) and \t (rows) to commas
+            const parsedData = data.replace(/\n/g, ',').replace(/\t/g, ',');
+            const tags = splitTags(splitChars, parsedData);
             handleAddTags(tags);
         };
 
@@ -515,7 +517,9 @@ export const TagInput = forwardRef<HTMLInputElement, TagInputProps>(
                         radius={radius}
                         icon={icon}
                         unstyled={unstyled}
-                        onMouseDown={(event) => {
+                        onMouseDown={(
+                            event: React.MouseEvent<HTMLDivElement>,
+                        ) => {
                             event.preventDefault();
                             if (!disabled && !valuesOverflow.current) {
                                 inputRef.current?.focus();

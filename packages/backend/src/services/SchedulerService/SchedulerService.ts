@@ -5,12 +5,15 @@ import {
     CreateSchedulerLog,
     DashboardDAO,
     ForbiddenError,
+    getTimezoneLabel,
     getTzMinutesOffset,
     isChartScheduler,
     isCreateSchedulerSlackTarget,
     isDashboardScheduler,
     isUserWithOrg,
     isValidFrequency,
+    isValidTimezone,
+    NotExistsError,
     ParameterError,
     ScheduledJobs,
     Scheduler,
@@ -18,6 +21,7 @@ import {
     SchedulerCronUpdate,
     SchedulerFormat,
     SessionUser,
+    UnexpectedServerError,
     UpdateSchedulerAndTargetsWithoutId,
 } from '@lightdash/common';
 import { arrayToString, stringToArray } from 'cron-converter';
@@ -232,6 +236,10 @@ export class SchedulerService extends BaseService {
             );
         }
 
+        if (!isValidTimezone(updatedScheduler.timezone)) {
+            throw new ParameterError('Timezone string is not valid');
+        }
+
         const {
             resource: { organizationUuid, projectUuid },
         } = await this.checkUserCanUpdateSchedulerResource(user, schedulerUuid);
@@ -273,6 +281,8 @@ export class SchedulerService extends BaseService {
                         ? scheduler.filters.length
                         : 0,
                 }),
+                timeZone: getTimezoneLabel(scheduler.timezone),
+                includeLinks: scheduler.includeLinks !== false,
             },
         };
         this.analytics.track(updateSchedulerEventData);
@@ -382,6 +392,11 @@ export class SchedulerService extends BaseService {
         ) {
             throw new ForbiddenError();
         }
+        if (job.status === 'error') {
+            throw new NotExistsError(
+                job.details?.error ?? 'Unable to download CSV',
+            );
+        }
         return job;
     }
 
@@ -439,6 +454,9 @@ export class SchedulerService extends BaseService {
             throw new ParameterError(
                 'You must specify at least 1 destination before sending a scheduled delivery',
             );
+        }
+        if (!isValidTimezone(scheduler.timezone)) {
+            throw new ParameterError('Timezone string is not valid');
         }
 
         await this.checkViewResource(user, scheduler);

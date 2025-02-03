@@ -27,7 +27,7 @@ import {
     type ReactNode,
     type RefObject,
 } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { useTableStyles } from '../../../hooks/styles/useTableStyles';
 import { useDeleteValidation } from '../../../hooks/validation/useValidation';
 import MantineIcon from '../../common/MantineIcon';
@@ -100,7 +100,7 @@ const AnchorToResource: FC<{
                     textDecoration: 'none',
                 },
             }}
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
                 e.stopPropagation();
             }}
         >
@@ -187,7 +187,9 @@ const TableValidationItem = forwardRef<
                     <Box w={24}>
                         {hovered && (
                             <ActionIcon
-                                onClick={(e) => {
+                                onClick={(
+                                    e: React.MouseEvent<HTMLButtonElement>,
+                                ) => {
                                     deleteValidation(
                                         validationError.validationId,
                                     );
@@ -215,15 +217,16 @@ export const ValidatorTable: FC<{
     const { cx, classes } = useTableStyles();
     const { colors } = useMantineTheme();
 
-    const location = useLocation<{ validationId: number }>();
+    const location = useLocation();
     const searchParams = new URLSearchParams(location.search);
     const validationId = searchParams.get('validationId');
     const refs = useMemo(
         () =>
             data.reduce((acc, value) => {
-                acc[value.validationId.toString()] = createRef();
+                acc[value.validationId.toString()] =
+                    createRef<HTMLTableRowElement | null>();
                 return acc;
-            }, {} as { [key: string]: RefObject<HTMLTableRowElement> }),
+            }, {} as { [key: string]: RefObject<HTMLTableRowElement | null> }),
         [data],
     );
 

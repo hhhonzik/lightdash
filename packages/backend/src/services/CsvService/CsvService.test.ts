@@ -6,6 +6,8 @@ import { S3CacheClient } from '../../clients/Aws/S3CacheClient';
 import EmailClient from '../../clients/EmailClient/EmailClient';
 import { lightdashConfig } from '../../config/lightdashConfig';
 import { AnalyticsModel } from '../../models/AnalyticsModel';
+import type { CatalogModel } from '../../models/CatalogModel/CatalogModel';
+import { ContentModel } from '../../models/ContentModel/ContentModel';
 import { DashboardModel } from '../../models/DashboardModel/DashboardModel';
 import { DownloadFileModel } from '../../models/DownloadFileModel';
 import { EmailModel } from '../../models/EmailModel';
@@ -17,11 +19,13 @@ import { SavedChartModel } from '../../models/SavedChartModel';
 import { SavedSqlModel } from '../../models/SavedSqlModel';
 import { SpaceModel } from '../../models/SpaceModel';
 import { SshKeyPairModel } from '../../models/SshKeyPairModel';
+import type { TagsModel } from '../../models/TagsModel';
 import { UserAttributesModel } from '../../models/UserAttributesModel';
 import { UserModel } from '../../models/UserModel';
 import { UserWarehouseCredentialsModel } from '../../models/UserWarehouseCredentials/UserWarehouseCredentialsModel';
 import { WarehouseAvailableTablesModel } from '../../models/WarehouseAvailableTablesModel/WarehouseAvailableTablesModel';
 import { SchedulerClient } from '../../scheduler/SchedulerClient';
+import { EncryptionUtil } from '../../utils/EncryptionUtil/EncryptionUtil';
 import { ProjectService } from '../ProjectService/ProjectService';
 import { CsvService } from './CsvService';
 import { itemMap, metricQuery } from './CsvService.mock';
@@ -56,6 +60,10 @@ describe('Csv service', () => {
             downloadFileModel: {} as DownloadFileModel,
             s3Client: {} as S3Client,
             groupsModel: {} as GroupsModel,
+            tagsModel: {} as TagsModel,
+            catalogModel: {} as CatalogModel,
+            contentModel: {} as ContentModel,
+            encryptionUtil: {} as EncryptionUtil,
         }),
         s3Client: {} as S3Client,
         savedChartModel: {} as SavedChartModel,

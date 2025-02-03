@@ -37,6 +37,7 @@ import {
     Select,
     Space,
     Stack,
+    Switch,
     Tabs,
     Text,
     TextInput,
@@ -47,6 +48,7 @@ import {
     IconChevronDown,
     IconChevronUp,
     IconHelpCircle,
+    IconInfoCircle,
     IconMail,
     IconPercentage,
     IconSettings,
@@ -60,7 +62,7 @@ import MantineIcon from '../../../components/common/MantineIcon';
 import { TagInput } from '../../../components/common/TagInput/TagInput';
 import TimeZonePicker from '../../../components/common/TimeZonePicker';
 import { CronInternalInputs } from '../../../components/ReactHookForm/CronInput';
-import { hasRequiredScopes } from '../../../components/UserSettings/SlackSettingsPanel';
+import { hasRequiredScopes } from '../../../components/UserSettings/SlackSettingsPanel/utils';
 import { useDashboardQuery } from '../../../hooks/dashboard/useDashboard';
 import useHealth from '../../../hooks/health/useHealth';
 import { useGetSlack, useSlackChannels } from '../../../hooks/slack/useSlack';
@@ -72,17 +74,7 @@ import { isInvalidCronExpression } from '../../../utils/fieldValidators';
 import SchedulerFilters from './SchedulerFilters';
 import SchedulersModalFooter from './SchedulerModalFooter';
 import { SchedulerPreview } from './SchedulerPreview';
-
-export enum Limit {
-    TABLE = 'table',
-    ALL = 'all',
-    CUSTOM = 'custom',
-}
-
-export enum Values {
-    FORMATTED = 'formatted',
-    RAW = 'raw',
-}
+import { Limit, Values } from './types';
 
 enum SlackStates {
     LOADING,
@@ -109,6 +101,7 @@ const DEFAULT_VALUES = {
     customViewportWidth: undefined,
     selectedTabs: undefined,
     thresholds: [],
+    includeLinks: true,
 };
 
 const DEFAULT_VALUES_ALERT = {
@@ -200,6 +193,7 @@ const getFormValuesFromScheduler = (schedulerData: SchedulerAndTargets) => {
         }),
         thresholds: schedulerData.thresholds,
         notificationFrequency: schedulerData.notificationFrequency,
+        includeLinks: schedulerData.includeLinks !== false,
     };
 };
 
@@ -351,13 +345,12 @@ const SchedulerForm: FC<Props> = ({
                 ...emailTargets,
                 ...slackTargets,
             ];
-
             return {
                 name: values.name,
                 message: values.message,
                 format: values.format,
                 cron: values.cron,
-                timezone: values.timezone,
+                timezone: values.timezone || undefined,
                 options,
                 targets,
                 ...(resource?.type === 'dashboard' && {
@@ -371,6 +364,7 @@ const SchedulerForm: FC<Props> = ({
                     'notificationFrequency' in values
                         ? (values.notificationFrequency as NotificationFrequency)
                         : undefined,
+                includeLinks: values.includeLinks !== false,
             };
         },
     });
@@ -1115,6 +1109,31 @@ const SchedulerForm: FC<Props> = ({
 
                 <Tabs.Panel value="customization">
                     <Stack p="md">
+                        <Group>
+                            <Switch
+                                label="Include links to Lightdash"
+                                checked={form.values.includeLinks}
+                                onChange={() =>
+                                    form.setFieldValue(
+                                        'includeLinks',
+                                        !form.values?.includeLinks,
+                                    )
+                                }
+                            ></Switch>
+                            <Tooltip
+                                label={`Include links to the shared content in your Lightdash project. \n
+                                                                 We recommend turning this off if you're sharing with users who do not have access to your Lightdash project`}
+                                multiline
+                                withinPortal
+                                position="right"
+                                maw={400}
+                            >
+                                <MantineIcon
+                                    icon={IconInfoCircle}
+                                    color="gray.6"
+                                />
+                            </Tooltip>
+                        </Group>
                         <Text fw={600}>Customize delivery message body</Text>
 
                         <MDEditor

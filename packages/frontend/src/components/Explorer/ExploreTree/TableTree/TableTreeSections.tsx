@@ -8,13 +8,14 @@ import {
 import { Button, Center, Group, Text, Tooltip } from '@mantine/core';
 import { IconAlertTriangle, IconPlus } from '@tabler/icons-react';
 import { useMemo, type FC } from 'react';
-import { useParams } from 'react-router-dom';
-import { useApp } from '../../../../providers/AppProvider';
-import { useExplorerContext } from '../../../../providers/ExplorerProvider';
+import { useParams } from 'react-router';
+import useApp from '../../../../providers/App/useApp';
+import useExplorerContext from '../../../../providers/Explorer/useExplorerContext';
 import MantineIcon from '../../../common/MantineIcon';
 import DocumentationHelpButton from '../../../DocumentationHelpButton';
-import { getSearchResults, TreeProvider } from './Tree/TreeProvider';
+import { TreeProvider } from './Tree/TreeProvider';
 import TreeRoot from './Tree/TreeRoot';
+import { getSearchResults } from './Tree/utils';
 
 type Props = {
     searchQuery?: string;
@@ -102,12 +103,12 @@ const TableTreeSections: FC<Props> = ({
         <>
             {missingFields && missingFields.all.length > 0 && (
                 <>
-                    {' '}
                     <Group mt="sm" mb="xs">
                         <Text fw={600} color="gray.6">
                             Missing fields
                         </Text>
                     </Group>
+
                     {missingFields.all.map((missingField) => {
                         return (
                             <Tooltip
@@ -130,20 +131,25 @@ const TableTreeSections: FC<Props> = ({
                                         );
                                     }}
                                     ml={12}
+                                    my="xs"
                                     sx={{ cursor: 'pointer' }}
+                                    noWrap
+                                    spacing="sm"
                                 >
                                     <MantineIcon
                                         icon={IconAlertTriangle}
                                         color="yellow.9"
                                         style={{ flexShrink: 0 }}
                                     />
-                                    <Text>{missingField}</Text>
+
+                                    <Text truncate>{missingField}</Text>
                                 </Group>
                             </Tooltip>
                         );
                     })}
                 </>
             )}
+
             {isSearching &&
             getSearchResults(dimensions, searchQuery).size === 0 ? null : (
                 <Group mt="sm" mb="xs" position={'apart'}>

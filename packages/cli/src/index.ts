@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { LightdashError, ValidationTarget } from '@lightdash/common';
 import { InvalidArgumentError, Option, program } from 'commander';
+import { validate } from 'uuid';
 import { findDbtDefaultProfile } from './dbt/profile';
 import { compileHandler } from './handlers/compile';
 import { refreshHandler } from './handlers/dbt/refresh';
 import { dbtRunHandler } from './handlers/dbt/run';
 import { deployHandler } from './handlers/deploy';
+import { downloadHandler, uploadHandler } from './handlers/download';
 import { generateHandler } from './handlers/generate';
 import { generateExposuresHandler } from './handlers/generateExposures';
 import { login } from './handlers/login';
@@ -53,6 +55,20 @@ function parseUseDbtListOption(value: string | undefined): boolean {
         return true;
     }
     return value.toLowerCase() !== 'false';
+}
+
+function parseProjectArgument(value: string | undefined): string | undefined {
+    if (value === undefined) {
+        throw new InvalidArgumentError('No project argument provided.');
+    }
+
+    const isValidUuid = validate(value);
+
+    if (!isValidUuid) {
+        throw new InvalidArgumentError('Not a valid project UUID.');
+    }
+
+    return value;
 }
 
 program
@@ -281,7 +297,16 @@ program
     .option('--state <state>')
     .option('--full-refresh')
     .option('--verbose', undefined, false)
-
+    .option(
+        '--skip-warehouse-catalog',
+        'Skip fetch warehouse catalog and use types in yml',
+        false,
+    )
+    .option(
+        '--skip-dbt-compile',
+        'Skip `dbt compile` and deploy from the existing ./target/manifest.json',
+        false,
+    )
     .action(compileHandler);
 
 program
@@ -419,6 +444,65 @@ program
     )
     .option('--verbose', undefined, false)
     .action(stopPreviewHandler);
+
+program
+    .command('download')
+    .description('Downloads charts and dashboards as code')
+    .option('--verbose', undefined, false)
+    .option(
+        '-c, --charts <charts...>',
+        'specify chart slugs, uuids, or urls to download',
+        [],
+    )
+    .option(
+        '-d, --dashboards <dashboards...>',
+        'specify dashboard slugs, uuids or urls to download',
+        [],
+    )
+    .option(
+        '-p, --path <path>',
+        'specify a custom path to download charts and dashboards',
+        undefined,
+    )
+    .option(
+        '--project <project uuid>',
+        'specify a project UUID to download',
+        parseProjectArgument,
+        undefined,
+    )
+    .action(downloadHandler);
+
+program
+    .command('upload')
+    .description('Uploads charts and dashboards as code')
+    .option('--verbose', undefined, false)
+    .option(
+        '-c, --charts <charts...>',
+        'specify chart slugs to force upload',
+        [],
+    )
+    .option(
+        '-d, --dashboards <dashboards...>',
+        'specify dashboard slugs to force upload',
+        [],
+    )
+    .option(
+        '--force',
+        'Force upload even if local files have not changed, use this when you want to upload files to a new project',
+        false,
+    )
+    .option(
+        '-p, --path <path>',
+        'specify a custom path to upload charts and dashboards from',
+        undefined,
+    )
+    .option(
+        '--project <project uuid>',
+        'specify a project UUID to upload',
+        parseProjectArgument,
+        undefined,
+    )
+    .action(uploadHandler);
 
 program
     .command('deploy')
@@ -625,6 +709,7 @@ ${styles.bold('Examples:')}
     .option('--target <name>', 'target to use in profiles.yml file', undefined)
     .option('--vars <vars>')
     .option('-y, --assume-yes', 'assume yes to prompts', false)
+    .option('--skip-existing', 'skip files that already exist', false)
     .option(
         '--exclude-meta',
         'exclude Lightdash metadata from the generated .yml',

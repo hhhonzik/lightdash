@@ -131,10 +131,11 @@ export class PromoteService extends BaseService {
         });
     }
 
-    private async getPromoteCharts(
+    async getPromoteCharts(
         user: SessionUser,
         upstreamProjectUuid: string,
         chartUuid: string,
+        includeOrphanChartsWithinDashboard?: boolean,
     ): Promise<{
         promotedChart: PromotedChart;
         upstreamChart: UpstreamChart;
@@ -147,6 +148,7 @@ export class PromoteService extends BaseService {
         const upstreamCharts = await this.savedChartModel.find({
             projectUuid: upstreamProjectUuid,
             slug: savedChart.slug,
+            includeOrphanChartsWithinDashboard,
         });
         if (upstreamCharts.length > 1) {
             throw new AlreadyExistsError(
@@ -204,6 +206,7 @@ export class PromoteService extends BaseService {
                     subject('Space', {
                         organizationUuid,
                         projectUuid: upstreamContent.projectUuid,
+                        isPrivate: upstreamContent.space.isPrivate,
                         access: upstreamContent.access,
                     }),
                 )
@@ -330,7 +333,7 @@ export class PromoteService extends BaseService {
         PromoteService.checkPromoteSpacePermissions(user, upstreamChart);
     }
 
-    private static checkPromoteDashboardPermissions(
+    static checkPromoteDashboardPermissions(
         user: SessionUser,
         promotedDashboard: PromotedDashboard,
         upstreamDashboard: UpstreamDashboard,
@@ -777,7 +780,7 @@ export class PromoteService extends BaseService {
         };
     }
 
-    private async updateDashboard(
+    async updateDashboard(
         user: SessionUser,
         promotionChanges: PromotionChanges,
     ): Promise<PromotionChanges> {
@@ -1037,6 +1040,7 @@ export class PromoteService extends BaseService {
         user: SessionUser,
         promotedDashboard: PromotedDashboard,
         upstreamDashboard: UpstreamDashboard,
+        includeOrphanChartsWithinDashboard?: boolean,
     ): Promise<
         [
             PromotionChanges,
@@ -1059,7 +1063,12 @@ export class PromoteService extends BaseService {
         );
 
         const chartPromises = chartUuids.map((chartUuid) =>
-            this.getPromoteCharts(user, upstreamProjectUuid, chartUuid),
+            this.getPromoteCharts(
+                user,
+                upstreamProjectUuid,
+                chartUuid,
+                includeOrphanChartsWithinDashboard,
+            ),
         );
         const charts = await Promise.all(chartPromises);
 

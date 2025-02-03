@@ -34,7 +34,7 @@ const getGithubRepositories = async () =>
         body: undefined,
     });
 
-export const useGitHubRepositories = () => {
+const useGitHubRepositories = () => {
     const { showToastApiError } = useToaster();
 
     return useQuery<GitRepo[], ApiError>({
@@ -42,7 +42,7 @@ export const useGitHubRepositories = () => {
         queryFn: () => getGithubRepositories(),
         retry: false,
         onError: ({ error }) => {
-            if (error.statusCode === 404) return; // Ignore missing installation errors
+            if (error.statusCode === 404 || error.statusCode === 401) return; // Ignore missing installation errors or unauthorized in demo
 
             showToastApiError({
                 title: 'Failed to get GitHub integration',

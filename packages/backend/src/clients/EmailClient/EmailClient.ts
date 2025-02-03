@@ -82,7 +82,7 @@ export default class EmailClient {
                 hbs({
                     viewEngine: {
                         partialsDir: path.join(__dirname, './templates/'),
-                        defaultLayout: false,
+                        defaultLayout: undefined,
                         extname: '.html',
                     },
                     viewPath: path.join(__dirname, './templates/'),
@@ -193,6 +193,7 @@ export default class EmailClient {
         imageUrl: string,
         url: string,
         schedulerUrl: string,
+        includeLinks: boolean,
         pdfFile?: string,
         expirationDays?: number,
         deliveryType: string = 'Scheduled delivery',
@@ -214,6 +215,7 @@ export default class EmailClient {
                 schedulerUrl,
                 expirationDays,
                 deliveryType,
+                includeLinks,
             },
             text: title,
             attachments: pdfFile
@@ -239,6 +241,7 @@ export default class EmailClient {
         attachment: AttachmentUrl,
         url: string,
         schedulerUrl: string,
+        includeLinks: boolean,
         expirationDays?: number,
     ) {
         const csvUrl = attachment.path;
@@ -261,6 +264,7 @@ export default class EmailClient {
                 host: this.lightdashConfig.siteUrl,
                 schedulerUrl,
                 expirationDays,
+                includeLinks,
             },
             text: title,
         });
@@ -277,6 +281,7 @@ export default class EmailClient {
         attachments: AttachmentUrl[],
         url: string,
         schedulerUrl: string,
+        includeLinks: boolean,
         expirationDays?: number,
     ) {
         const csvUrls = attachments.filter(
@@ -306,6 +311,7 @@ export default class EmailClient {
                 host: this.lightdashConfig.siteUrl,
                 schedulerUrl,
                 expirationDays,
+                includeLinks,
             },
             text: title,
         });

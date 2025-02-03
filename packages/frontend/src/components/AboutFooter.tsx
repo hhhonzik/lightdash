@@ -12,21 +12,24 @@ import {
     Stack,
     Text,
     Title,
-    type MantineSize,
 } from '@mantine/core';
 import { IconBook, IconInfoCircle } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
-import { useApp } from '../providers/AppProvider';
-import { TrackPage, TrackSection } from '../providers/TrackingProvider';
+import useApp from '../providers/App/useApp';
+import {
+    TrackPage,
+    TrackSection,
+} from '../providers/Tracking/TrackingProvider';
 import Logo from '../svgs/grey-icon-logo.svg?react';
 import { PageName, PageType, SectionName } from '../types/Events';
 import MantineIcon from './common/MantineIcon';
 import MantineLinkButton from './common/MantineLinkButton';
-import { PAGE_CONTENT_WIDTH } from './common/Page/Page';
-
-export const FOOTER_HEIGHT = 80;
-export const FOOTER_MARGIN: MantineSize = 'lg';
+import {
+    FOOTER_HEIGHT,
+    FOOTER_MARGIN,
+    PAGE_CONTENT_WIDTH,
+} from './common/Page/constants';
 
 const AboutFooter: FC<{ minimal?: boolean; maxWidth?: number }> = ({
     minimal,
@@ -42,7 +45,7 @@ const AboutFooter: FC<{ minimal?: boolean; maxWidth?: number }> = ({
     return (
         <TrackSection name={SectionName.PAGE_FOOTER}>
             <Box mt={FOOTER_MARGIN} h={FOOTER_HEIGHT} component="footer">
-                <Divider color="gray.2" w="100%" />
+                <Divider color="gray.2" w="100%" mb="-1px" />
 
                 <Group
                     h="100%"

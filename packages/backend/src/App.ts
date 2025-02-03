@@ -5,6 +5,7 @@ import './sentry'; // Sentry has to be initialized before anything else
 import {
     LightdashError,
     LightdashMode,
+    LightdashVersionHeader,
     SessionUser,
     UnexpectedServerError,
 } from '@lightdash/common';
@@ -44,7 +45,10 @@ import { errorHandler } from './errors';
 import { RegisterRoutes } from './generated/routes';
 import apiSpec from './generated/swagger.json';
 import Logger from './logging/logger';
-import { expressWinstonMiddleware } from './logging/winston';
+import {
+    expressWinstonMiddleware,
+    expressWinstonPreResponseMiddleware,
+} from './logging/winston';
 import { ModelProviderMap, ModelRepository } from './models/ModelRepository';
 import { postHogClient } from './postHog';
 import { apiV1Router } from './routers/apiV1Router';
@@ -103,6 +107,8 @@ const schedulerWorkerFactory = (context: {
         slackClient: context.clients.getSlackClient(),
         semanticLayerService:
             context.serviceRepository.getSemanticLayerService(),
+        catalogService: context.serviceRepository.getCatalogService(),
+        encryptionUtil: context.utils.getEncryptionUtil(),
     });
 
 const slackBotFactory = (context: {
@@ -132,6 +138,7 @@ type AppArguments = {
     utilProviders?: UtilProviderMap;
     slackBotFactory?: typeof slackBotFactory;
     schedulerWorkerFactory?: typeof schedulerWorkerFactory;
+    customExpressMiddlewares?: Array<(app: Express) => void>; // Array of custom middleware functions
 };
 
 export default class App {
@@ -161,6 +168,8 @@ export default class App {
 
     private readonly prometheusMetrics: PrometheusMetrics;
 
+    private readonly customExpressMiddlewares: Array<(app: Express) => void>;
+
     constructor(args: AppArguments) {
         this.lightdashConfig = args.lightdashConfig;
         this.port = args.port;
@@ -169,7 +178,7 @@ export default class App {
             lightdashConfig: this.lightdashConfig,
             writeKey: this.lightdashConfig.rudder.writeKey || 'notrack',
             dataPlaneUrl: this.lightdashConfig.rudder.dataPlaneUrl
-                ? `${this.lightdashConfig.rudder.dataPlaneUrl}/v1/batch`
+                ? this.lightdashConfig.rudder.dataPlaneUrl
                 : 'notrack',
             options: {
                 enable:
@@ -210,6 +219,7 @@ export default class App {
             }),
             clients: this.clients,
             models: this.models,
+            utils: this.utils,
         });
         this.slackBotFactory = args.slackBotFactory || slackBotFactory;
         this.schedulerWorkerFactory =
@@ -217,6 +227,7 @@ export default class App {
         this.prometheusMetrics = new PrometheusMetrics(
             this.lightdashConfig.prometheus,
         );
+        this.customExpressMiddlewares = args.customExpressMiddlewares || [];
     }
 
     async start() {
@@ -262,6 +273,11 @@ export default class App {
             tablename: 'sessions',
             sidfieldname: 'sid',
         });
+
+        // Use custom middlewares if provided
+        this.customExpressMiddlewares.forEach((middleware) =>
+            middleware(expressApp),
+        );
 
         expressApp.use(
             express.json({ limit: this.lightdashConfig.maxPayloadSize }),
@@ -365,12 +381,20 @@ export default class App {
                 },
                 noSniff: true,
                 xFrameOptions: false,
+                crossOriginOpenerPolicy: {
+                    policy: [LightdashMode.DEMO, LightdashMode.PR].includes(
+                        this.lightdashConfig.mode,
+                    )
+                        ? 'unsafe-none'
+                        : 'same-origin',
+                },
             }),
         );
 
-        // Permissions-Policy header that is not yet supported by helmet. More details here: https://github.com/helmetjs/helmet/issues/234
         expressApp.use((req, res, next) => {
+            // Permissions-Policy header that is not yet supported by helmet. More details here: https://github.com/helmetjs/helmet/issues/234
             res.setHeader('Permissions-Policy', 'camera=(), microphone=()');
+            res.setHeader(LightdashVersionHeader, VERSION);
             next();
         });
 
@@ -401,7 +425,8 @@ export default class App {
         expressApp.use(passport.initialize());
         expressApp.use(passport.session());
 
-        expressApp.use(expressWinstonMiddleware);
+        expressApp.use(expressWinstonPreResponseMiddleware); // log request before response is sent
+        expressApp.use(expressWinstonMiddleware); // log request + response
 
         expressApp.get('/', (req, res) => {
             res.sendFile(
@@ -630,5 +655,17 @@ export default class App {
                 Logger.error('Error stopping PostHog Client', e);
             }
         }
+    }
+
+    getServiceRepository() {
+        return this.serviceRepository;
+    }
+
+    getModels() {
+        return this.models;
+    }
+
+    getDatabase() {
+        return this.database;
     }
 }

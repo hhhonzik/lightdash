@@ -2,19 +2,23 @@ import { LightdashAnalytics } from '../analytics/LightdashAnalytics';
 import { ClientRepository } from '../clients/ClientRepository';
 import { LightdashConfig } from '../config/parseConfig';
 import { ModelRepository } from '../models/ModelRepository';
+import type { UtilRepository } from '../utils/UtilRepository';
 import { AnalyticsService } from './AnalyticsService/AnalyticsService';
 import { BaseService } from './BaseService';
 import { CatalogService } from './CatalogService/CatalogService';
+import { CoderService } from './CoderService/CoderService';
 import { CommentService } from './CommentService/CommentService';
 import { ContentService } from './ContentService/ContentService';
 import { CsvService } from './CsvService/CsvService';
 import { DashboardService } from './DashboardService/DashboardService';
 import { DownloadFileService } from './DownloadFileService/DownloadFileService';
+import { FeatureFlagService } from './FeatureFlag/FeatureFlagService';
 import { GdriveService } from './GdriveService/GdriveService';
 import { GithubAppService } from './GithubAppService/GithubAppService';
 import { GitIntegrationService } from './GitIntegrationService/GitIntegrationService';
 import { GroupsService } from './GroupService';
 import { HealthService } from './HealthService/HealthService';
+import { MetricsExplorerService } from './MetricsExplorerService/MetricsExplorerService';
 import { NotificationsService } from './NotificationsService/NotificationsService';
 import { OrganizationService } from './OrganizationService/OrganizationService';
 import { PersonalAccessTokenService } from './PersonalAccessTokenService';
@@ -69,12 +73,14 @@ interface ServiceManifest {
     userService: UserService;
     validationService: ValidationService;
     catalogService: CatalogService;
+    metricsExplorerService: MetricsExplorerService;
     promoteService: PromoteService;
     savedSqlService: SavedSqlService;
     contentService: ContentService;
     semanticLayerService: SemanticLayerService;
     savedSemanticViewerChartService: SavedSemanticViewerChartService;
-
+    coderService: CoderService;
+    featureFlagService: FeatureFlagService;
     /** An implementation signature for these services are not available at this stage */
     embedService: unknown;
     aiService: unknown;
@@ -91,6 +97,7 @@ type ServiceProvider<T extends ServiceManifest> = (providerArgs: {
     repository: ServiceRepository;
     context: OperationContext;
     models: ModelRepository;
+    utils: UtilRepository;
     clients: ClientRepository;
 }) => T[keyof T];
 
@@ -171,21 +178,26 @@ abstract class ServiceRepositoryBase {
 
     protected models: ModelRepository;
 
+    protected readonly utils: UtilRepository;
+
     constructor({
         serviceProviders,
         context,
         clients,
         models,
+        utils,
     }: {
         serviceProviders?: ServiceProviderMap<ServiceManifest>;
         context: OperationContext;
         clients: ClientRepository;
         models: ModelRepository;
+        utils: UtilRepository;
     }) {
         this.providers = serviceProviders ?? {};
         this.context = context;
         this.clients = clients;
         this.models = models;
+        this.utils = utils;
     }
 }
 
@@ -268,6 +280,7 @@ export class ServiceRepository
                     projectModel: this.models.getProjectModel(),
                     schedulerClient: this.clients.getSchedulerClient(),
                     slackClient: this.clients.getSlackClient(),
+                    catalogModel: this.models.getCatalogModel(),
                 }),
         );
     }
@@ -388,6 +401,7 @@ export class ServiceRepository
             'personalAccessTokenService',
             () =>
                 new PersonalAccessTokenService({
+                    lightdashConfig: this.context.lightdashConfig,
                     analytics: this.context.lightdashAnalytics,
                     personalAccessTokenModel:
                         this.models.getPersonalAccessTokenModel(),
@@ -438,6 +452,10 @@ export class ServiceRepository
                     downloadFileModel: this.models.getDownloadFileModel(),
                     s3Client: this.clients.getS3Client(),
                     groupsModel: this.models.getGroupsModel(),
+                    tagsModel: this.models.getTagsModel(),
+                    catalogModel: this.models.getCatalogModel(),
+                    contentModel: this.models.getContentModel(),
+                    encryptionUtil: this.utils.getEncryptionUtil(),
                 }),
         );
     }
@@ -457,6 +475,7 @@ export class ServiceRepository
                     schedulerClient: this.clients.getSchedulerClient(),
                     slackClient: this.clients.getSlackClient(),
                     dashboardModel: this.models.getDashboardModel(),
+                    catalogModel: this.models.getCatalogModel(),
                 }),
         );
     }
@@ -616,6 +635,23 @@ export class ServiceRepository
         );
     }
 
+    public getCoderService(): CoderService {
+        return this.getService(
+            'coderService',
+            () =>
+                new CoderService({
+                    lightdashConfig: this.context.lightdashConfig,
+                    analytics: this.context.lightdashAnalytics,
+                    projectModel: this.models.getProjectModel(),
+                    savedChartModel: this.models.getSavedChartModel(),
+                    dashboardModel: this.models.getDashboardModel(),
+                    spaceModel: this.models.getSpaceModel(),
+                    schedulerClient: this.clients.getSchedulerClient(),
+                    promoteService: this.getPromoteService(),
+                }),
+        );
+    }
+
     public getCatalogService(): CatalogService {
         return this.getService(
             'catalogService',
@@ -628,6 +664,21 @@ export class ServiceRepository
                     catalogModel: this.models.getCatalogModel(),
                     savedChartModel: this.models.getSavedChartModel(),
                     spaceModel: this.models.getSpaceModel(),
+                    tagsModel: this.models.getTagsModel(),
+                }),
+        );
+    }
+
+    public getMetricsExplorerService(): MetricsExplorerService {
+        return this.getService(
+            'metricsExplorerService',
+            () =>
+                new MetricsExplorerService({
+                    lightdashConfig: this.context.lightdashConfig,
+                    catalogModel: this.models.getCatalogModel(),
+                    projectService: this.getProjectService(),
+                    catalogService: this.getCatalogService(),
+                    projectModel: this.models.getProjectModel(),
                 }),
         );
     }
@@ -708,6 +759,17 @@ export class ServiceRepository
         );
     }
 
+    public getFeatureFlagService(): FeatureFlagService {
+        return this.getService(
+            'featureFlagService',
+            () =>
+                new FeatureFlagService({
+                    lightdashConfig: this.context.lightdashConfig,
+                    featureFlagModel: this.models.getFeatureFlagModel(),
+                }),
+        );
+    }
+
     public getEmbedService<EmbedServiceImplT>(): EmbedServiceImplT {
         return this.getService('embedService');
     }
@@ -736,6 +798,7 @@ export class ServiceRepository
                     context: this.context,
                     models: this.models,
                     clients: this.clients,
+                    utils: this.utils,
                 }) as T;
             } else if (factory != null) {
                 serviceInstance = factory();

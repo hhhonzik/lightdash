@@ -1,87 +1,30 @@
 import { subject } from '@casl/ability';
-import { ProjectType, type OrganizationProject } from '@lightdash/common';
 import {
-    Badge,
-    Button,
-    Group,
-    MantineProvider,
-    Menu,
-    Modal,
-    Text,
-    TextInput,
-    Tooltip,
-} from '@mantine/core';
-import { IconArrowRight } from '@tabler/icons-react';
+    assertUnreachable,
+    ProjectType,
+    type OrganizationProject,
+} from '@lightdash/common';
+import { Badge, Box, Button, Group, Menu, Text, Tooltip } from '@mantine/core';
+import { IconArrowRight, IconPlus } from '@tabler/icons-react';
 import { useCallback, useMemo, useState, type FC } from 'react';
-import { useHistory, useRouteMatch } from 'react-router-dom';
+import { matchRoutes, useLocation, useMatch, useNavigate } from 'react-router';
 import useToaster from '../../hooks/toaster/useToaster';
 import {
     useActiveProjectUuid,
     useUpdateActiveProjectMutation,
 } from '../../hooks/useActiveProject';
 import { useIsTruncated } from '../../hooks/useIsTruncated';
-import { useCreatePreviewMutation } from '../../hooks/useProjectPreview';
 import { useProjects } from '../../hooks/useProjects';
-import { useApp } from '../../providers/AppProvider';
-import { Can } from '../common/Authorization';
+import useApp from '../../providers/App/useApp';
+import MantineIcon from '../common/MantineIcon';
+import { CreatePreviewModal } from './CreatePreviewProjectModal';
 
-const CreatePreviewModal = ({
-    isOpened,
-    onClose,
-    projectName,
-    projectUuid,
-}: {
-    isOpened: boolean;
-    onClose: () => void;
-    projectName: string;
-    projectUuid: string;
-}) => {
-    const { mutateAsync: createPreviewProject, isLoading: isPreviewCreating } =
-        useCreatePreviewMutation();
-
-    const [previewName, setPreviewName] = useState<string | undefined>();
-
-    return (
-        <MantineProvider inherit theme={{ colorScheme: 'light' }}>
-            <Modal
-                opened={isOpened}
-                onClose={() => onClose()}
-                title={`Create preview from ${projectName}`}
-            >
-                <Text>
-                    This will create a preview project from
-                    <Text span fw={500}>
-                        {projectName}
-                    </Text>
-                    . The new project will have the same connections and
-                    credentials.
-                </Text>
-                <TextInput
-                    mt="sm"
-                    mb="sm"
-                    label="Preview name"
-                    value={previewName}
-                    defaultValue={`Preview of ${projectName}`}
-                    onChange={(e) => {
-                        setPreviewName(e.currentTarget.value);
-                    }}
-                />
-                <Button
-                    disabled={isPreviewCreating}
-                    onClick={async () => {
-                        await createPreviewProject({
-                            projectUuid: projectUuid,
-                            name: previewName || `Preview of ${projectName}`,
-                        });
-                        onClose();
-                    }}
-                >
-                    {isPreviewCreating ? 'Creating preview' : 'Create preview'}
-                </Button>
-            </Modal>
-        </MantineProvider>
-    );
+const MENU_TEXT_PROPS = {
+    c: 'gray.2',
+    fz: 'xs',
+    fw: 500,
 };
+
 const InactiveProjectItem: FC<{
     item: OrganizationProject;
     handleProjectChange: (newUuid: string) => void;
@@ -104,15 +47,14 @@ const InactiveProjectItem: FC<{
                 >
                     <Text
                         ref={truncatedRef}
-                        c="gray.2"
-                        fz="xs"
-                        fw={500}
+                        {...MENU_TEXT_PROPS}
                         truncate
                         maw={350}
                     >
                         {item.name}
                     </Text>
                 </Tooltip>
+
                 {item.type === ProjectType.PREVIEW && (
                     <Badge
                         color="yellow.1"
@@ -161,24 +103,28 @@ const swappableProjectRoutes = (activeProjectUuid: string) => [
 
 const ProjectSwitcher = () => {
     const { showToastSuccess } = useToaster();
-    const history = useHistory();
+    const navigate = useNavigate();
+
+    const { user } = useApp();
 
     const { isInitialLoading: isLoadingProjects, data: projects } =
         useProjects();
     const { isLoading: isLoadingActiveProjectUuid, activeProjectUuid } =
         useActiveProjectUuid();
     const { mutate: setLastProjectMutation } = useUpdateActiveProjectMutation();
+    const location = useLocation();
+    const isHomePage = !!useMatch(`/projects/${activeProjectUuid}/home`);
 
-    const isHomePage = !!useRouteMatch({
-        path: '/projects/:projectUuid/home',
-        exact: true,
-    });
-
-    const swappableRouteMatch = useRouteMatch(
-        activeProjectUuid
-            ? { path: swappableProjectRoutes(activeProjectUuid), exact: true }
-            : [],
-    );
+    const routeMatches =
+        matchRoutes(
+            activeProjectUuid
+                ? swappableProjectRoutes(activeProjectUuid).map((path) => ({
+                      path,
+                  }))
+                : [],
+            location,
+        ) || [];
+    const swappableRouteMatch = routeMatches ? routeMatches[0]?.route : null;
 
     const shouldSwapProjectRoute = !!swappableRouteMatch && activeProjectUuid;
 
@@ -199,7 +145,7 @@ const ProjectSwitcher = () => {
                               children: 'Go to project home',
                               icon: IconArrowRight,
                               onClick: () => {
-                                  history.push(
+                                  void navigate(
                                       `/projects/${project.projectUuid}/home`,
                                   );
                               },
@@ -208,19 +154,19 @@ const ProjectSwitcher = () => {
             });
 
             if (shouldSwapProjectRoute) {
-                history.push(
+                void navigate(
                     swappableRouteMatch.path.replace(
                         activeProjectUuid,
                         project.projectUuid,
                     ),
                 );
             } else {
-                history.push(`/projects/${project.projectUuid}/home`);
+                void navigate(`/projects/${project.projectUuid}/home`);
             }
         },
         [
             activeProjectUuid,
-            history,
+            navigate,
             isHomePage,
             projects,
             setLastProjectMutation,
@@ -235,12 +181,66 @@ const ProjectSwitcher = () => {
         return projects.find((p) => p.projectUuid === activeProjectUuid);
     }, [activeProjectUuid, projects]);
 
+    // user has permission to create preview project on an organization level
+    const orgRoleCanCreatePreviews = useMemo(() => {
+        return user.data?.ability.can(
+            'create',
+            subject('Project', {
+                organizationUuid: user.data.organizationUuid,
+                type: ProjectType.PREVIEW,
+            }),
+        );
+    }, [user.data]);
+
     const inactiveProjects = useMemo(() => {
         if (!activeProjectUuid || !projects) return [];
-        return projects.filter((p) => p.projectUuid !== activeProjectUuid);
-    }, [activeProjectUuid, projects]);
+        return projects
+            .filter((p) => p.projectUuid !== activeProjectUuid)
+            .filter((project) => {
+                switch (project.type) {
+                    case ProjectType.DEFAULT:
+                        return true;
+                    case ProjectType.PREVIEW:
+                        // check if user has permission to create preview project on an organization level (developer, admin)
+                        // or check if user has permission to create preview project on a project level
+                        // - they should have permission (developer, admin) to the upstream project
+                        return (
+                            orgRoleCanCreatePreviews ||
+                            user.data?.ability.can(
+                                'create',
+                                subject('Project', {
+                                    upstreamProjectUuid: project.projectUuid,
+                                    type: ProjectType.PREVIEW,
+                                }),
+                            )
+                        );
+                    default:
+                        return assertUnreachable(
+                            project.type,
+                            `Unknown project type: ${project.type}`,
+                        );
+                }
+            });
+    }, [activeProjectUuid, projects, orgRoleCanCreatePreviews, user.data]);
+
+    const userCanCreatePreview = useMemo(() => {
+        if (isLoadingProjects || !projects || !user.data) return false;
+
+        return projects
+            .filter((p) => p.type === ProjectType.DEFAULT)
+            .some((project) =>
+                user.data.ability.can(
+                    'create',
+                    subject('Project', {
+                        organizationUuid: user.data.organizationUuid,
+                        upstreamProjectUuid: project.projectUuid,
+                        type: ProjectType.PREVIEW,
+                    }),
+                ),
+            );
+    }, [isLoadingProjects, projects, user.data]);
+
     const [isCreatePreviewOpen, setIsCreatePreview] = useState(false);
-    const { user } = useApp();
 
     if (
         isLoadingProjects ||
@@ -289,6 +289,20 @@ const ProjectSwitcher = () => {
                 </Menu.Target>
 
                 <Menu.Dropdown maw={400}>
+                    {inactiveProjects.length > 0 && (
+                        <Box
+                            pos="sticky"
+                            top={0}
+                            bg="gray.9"
+                            sx={(theme) => ({
+                                boxShadow: `0 -4px ${theme.colors.gray[9]}`,
+                            })}
+                        >
+                            <Menu.Label py={0}>All Projects</Menu.Label>
+                            <Menu.Divider />
+                        </Box>
+                    )}
+
                     {inactiveProjects.map((item) => (
                         <InactiveProjectItem
                             key={item.projectUuid}
@@ -296,37 +310,39 @@ const ProjectSwitcher = () => {
                             handleProjectChange={handleProjectChange}
                         />
                     ))}
-                    {activeProject && (
-                        <Can
-                            I="create"
-                            this={subject('Project', {
-                                organizationUuid: user.data?.organizationUuid,
-                                projectUuid: activeProject.projectUuid,
-                                type: ProjectType.PREVIEW,
+
+                    {userCanCreatePreview && (
+                        <Box
+                            pos="sticky"
+                            bottom={0}
+                            bg="gray.9"
+                            sx={(theme) => ({
+                                // fixes scroll overlap
+                                boxShadow: `0 4px ${theme.colors.gray[9]}`,
                             })}
                         >
-                            <Menu.Divider />
+                            {inactiveProjects.length > 0 && <Menu.Divider />}
 
                             <Menu.Item
-                                onClick={(e) => {
+                                onClick={(
+                                    e: React.MouseEvent<HTMLButtonElement>,
+                                ) => {
                                     setIsCreatePreview(!isCreatePreviewOpen);
                                     e.stopPropagation();
                                 }}
+                                icon={<MantineIcon icon={IconPlus} size="md" />}
                             >
-                                <Text fz="xs" fw={500}>
-                                    + Create preview
-                                </Text>
+                                <Text {...MENU_TEXT_PROPS}>Create Preview</Text>
                             </Menu.Item>
-                        </Can>
+                        </Box>
                     )}
                 </Menu.Dropdown>
             </Menu>
-            {activeProject && (
+
+            {isCreatePreviewOpen && (
                 <CreatePreviewModal
                     isOpened={isCreatePreviewOpen}
                     onClose={() => setIsCreatePreview(false)}
-                    projectName={activeProject.name}
-                    projectUuid={activeProject.projectUuid}
                 />
             )}
         </>

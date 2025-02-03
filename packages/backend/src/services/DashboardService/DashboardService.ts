@@ -3,7 +3,6 @@ import {
     CreateDashboard,
     CreateSchedulerAndTargetsWithoutIds,
     Dashboard,
-    DashboardBasicDetails,
     DashboardDAO,
     DashboardTab,
     DashboardTileTypes,
@@ -18,6 +17,7 @@ import {
     isDashboardVersionedFields,
     isUserWithOrg,
     isValidFrequency,
+    isValidTimezone,
     ParameterError,
     SchedulerAndTargets,
     SchedulerFormat,
@@ -25,10 +25,14 @@ import {
     TogglePinnedItemInfo,
     UpdateDashboard,
     UpdateMultipleDashboards,
+    type ChartFieldUpdates,
     type DashboardBasicDetailsWithTileTypes,
     type DuplicateDashboardParams,
+    type Explore,
+    type ExploreError,
 } from '@lightdash/common';
 import cronstrue from 'cronstrue';
+import { uniq } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
 import {
     CreateDashboardOrVersionEvent,
@@ -38,6 +42,8 @@ import {
 import { SlackClient } from '../../clients/Slack/SlackClient';
 import { getSchedulerTargetType } from '../../database/entities/scheduler';
 import { AnalyticsModel } from '../../models/AnalyticsModel';
+import type { CatalogModel } from '../../models/CatalogModel/CatalogModel';
+import { getChartFieldUsageChanges } from '../../models/CatalogModel/utils';
 import { DashboardModel } from '../../models/DashboardModel/DashboardModel';
 import { PinnedListModel } from '../../models/PinnedListModel';
 import type { ProjectModel } from '../../models/ProjectModel/ProjectModel';
@@ -60,6 +66,7 @@ type DashboardServiceArguments = {
     schedulerClient: SchedulerClient;
     slackClient: SlackClient;
     projectModel: ProjectModel;
+    catalogModel: CatalogModel;
 };
 
 export class DashboardService extends BaseService {
@@ -76,6 +83,8 @@ export class DashboardService extends BaseService {
     schedulerModel: SchedulerModel;
 
     savedChartModel: SavedChartModel;
+
+    catalogModel: CatalogModel;
 
     projectModel: ProjectModel;
 
@@ -94,6 +103,7 @@ export class DashboardService extends BaseService {
         schedulerClient,
         slackClient,
         projectModel,
+        catalogModel,
     }: DashboardServiceArguments) {
         super();
         this.analytics = analytics;
@@ -104,6 +114,7 @@ export class DashboardService extends BaseService {
         this.schedulerModel = schedulerModel;
         this.savedChartModel = savedChartModel;
         this.projectModel = projectModel;
+        this.catalogModel = catalogModel;
         this.schedulerClient = schedulerClient;
         this.slackClient = slackClient;
     }
@@ -263,6 +274,26 @@ export class DashboardService extends BaseService {
             }
             return acc;
         }, []);
+    }
+
+    private async updateChartFieldUsage(
+        projectUuid: string,
+        chartExplore: Explore | ExploreError,
+        chartFields: ChartFieldUpdates,
+    ) {
+        const fieldUsageChanges = await getChartFieldUsageChanges(
+            projectUuid,
+            chartExplore,
+            chartFields,
+            this.catalogModel.findTablesCachedExploreUuid.bind(
+                this.catalogModel,
+            ),
+        );
+
+        await this.catalogModel.updateFieldsChartUsage(
+            projectUuid,
+            fieldUsageChanges,
+        );
     }
 
     async create(
@@ -426,6 +457,32 @@ export class DashboardService extends BaseService {
                                 projectUuid,
                                 duplicatedChart.tableName,
                             );
+
+                        try {
+                            await this.updateChartFieldUsage(
+                                projectUuid,
+                                cachedExplore,
+                                {
+                                    oldChartFields: {
+                                        metrics: [],
+                                        dimensions: [],
+                                    },
+                                    newChartFields: {
+                                        metrics:
+                                            duplicatedChart.metricQuery.metrics,
+                                        dimensions:
+                                            duplicatedChart.metricQuery
+                                                .dimensions,
+                                    },
+                                },
+                            );
+                        } catch (error) {
+                            this.logger.error(
+                                `Error updating chart field usage for chart ${duplicatedChart.uuid}`,
+                                error,
+                            );
+                        }
+
                         this.analytics.track({
                             event: 'saved_chart.created',
                             userId: user.userUuid,
@@ -442,6 +499,7 @@ export class DashboardService extends BaseService {
                                         : undefined,
                             },
                         });
+
                         return {
                             ...tile,
                             uuid: uuidv4(),
@@ -609,6 +667,7 @@ export class DashboardService extends BaseService {
                     tiles: dashboard.tiles,
                     filters: dashboard.filters,
                     tabs: dashboard.tabs || [],
+                    config: dashboard.config,
                 },
                 user,
                 existingDashboardDao.projectUuid,
@@ -800,8 +859,11 @@ export class DashboardService extends BaseService {
     }
 
     async delete(user: SessionUser, dashboardUuid: string): Promise<void> {
-        const { organizationUuid, projectUuid, spaceUuid } =
-            await this.dashboardModel.getById(dashboardUuid);
+        const dashboardToDelete = await this.dashboardModel.getById(
+            dashboardUuid,
+        );
+        const { organizationUuid, projectUuid, spaceUuid, tiles } =
+            dashboardToDelete;
         const space = await this.spaceModel.getSpaceSummary(spaceUuid);
         const spaceAccess = await this.spaceModel.getUserSpaceAccess(
             user.userUuid,
@@ -823,9 +885,59 @@ export class DashboardService extends BaseService {
             );
         }
 
+        if (hasChartsInDashboard(dashboardToDelete)) {
+            try {
+                await Promise.all(
+                    tiles.map(async (tile) => {
+                        if (
+                            isChartTile(tile) &&
+                            tile.properties.belongsToDashboard &&
+                            tile.properties.savedChartUuid
+                        ) {
+                            const chartInDashboard =
+                                await this.savedChartModel.get(
+                                    tile.properties.savedChartUuid,
+                                );
+
+                            const cachedExplore =
+                                await this.projectModel.getExploreFromCache(
+                                    projectUuid,
+                                    chartInDashboard.tableName,
+                                );
+
+                            await this.updateChartFieldUsage(
+                                projectUuid,
+                                cachedExplore,
+                                {
+                                    oldChartFields: {
+                                        metrics:
+                                            chartInDashboard.metricQuery
+                                                .metrics,
+                                        dimensions:
+                                            chartInDashboard.metricQuery
+                                                .dimensions,
+                                    },
+                                    newChartFields: {
+                                        metrics: [],
+                                        dimensions: [],
+                                    },
+                                },
+                            );
+                        }
+                    }),
+                );
+            } catch (error) {
+                this.logger.error(
+                    `Error updating chart field usage for dashboard ${dashboardUuid}`,
+                    error,
+                );
+            }
+        }
+
         const deletedDashboard = await this.dashboardModel.delete(
             dashboardUuid,
         );
+
         this.analytics.track({
             event: 'dashboard.deleted',
             userId: user.userUuid,
@@ -858,6 +970,11 @@ export class DashboardService extends BaseService {
                 'Frequency not allowed, custom input is limited to hourly',
             );
         }
+
+        if (!isValidTimezone(newScheduler.timezone)) {
+            throw new ParameterError('Timezone string is not valid');
+        }
+
         const { projectUuid, organizationUuid } =
             await this.checkCreateScheduledDeliveryAccess(user, dashboardUuid);
         const scheduler = await this.schedulerModel.createScheduler({
@@ -893,6 +1010,8 @@ export class DashboardService extends BaseService {
                     isDashboardScheduler(scheduler) && scheduler.filters
                         ? scheduler.filters.length
                         : 0,
+                timeZone: scheduler.timezone,
+                includeLinks: scheduler.includeLinks,
             },
         };
         this.analytics.track(createSchedulerData);

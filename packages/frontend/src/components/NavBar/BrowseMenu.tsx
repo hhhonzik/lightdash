@@ -7,10 +7,11 @@ import {
     IconLayoutDashboard,
 } from '@tabler/icons-react';
 import { type FC } from 'react';
-import { Link } from 'react-router-dom';
-
+import { Link } from 'react-router';
+import { useHasMetricsInCatalog } from '../../features/metricsCatalog/hooks/useMetricsCatalog';
 import { useSpaceSummaries } from '../../hooks/useSpaces';
 import MantineIcon from '../common/MantineIcon';
+import { MetricsLink } from './MetricsLink';
 
 interface Props {
     projectUuid: string;
@@ -21,6 +22,9 @@ const BrowseMenu: FC<Props> = ({ projectUuid }) => {
         projectUuid,
         true,
     );
+    const { data: hasMetrics } = useHasMetricsInCatalog({
+        projectUuid,
+    });
 
     return (
         <Menu
@@ -36,7 +40,9 @@ const BrowseMenu: FC<Props> = ({ projectUuid }) => {
                     variant="default"
                     size="xs"
                     fz="sm"
-                    leftIcon={<MantineIcon icon={IconCategory} />}
+                    leftIcon={
+                        <MantineIcon color="#adb5bd" icon={IconCategory} />
+                    }
                 >
                     Browse
                 </Button>
@@ -67,6 +73,10 @@ const BrowseMenu: FC<Props> = ({ projectUuid }) => {
                     All saved charts
                 </Menu.Item>
 
+                {!hasMetrics && (
+                    <MetricsLink projectUuid={projectUuid} asMenu />
+                )}
+
                 {isInitialLoading || (spaces && spaces.length > 0) ? (
                     <>
                         <Menu.Divider />
@@ -81,10 +91,10 @@ const BrowseMenu: FC<Props> = ({ projectUuid }) => {
                 ) : null}
 
                 <ScrollArea
-                    offsetScrollbars
                     variant="primary"
                     className="only-vertical"
-                    type="auto"
+                    scrollbarSize={6}
+                    type="hover"
                 >
                     <Box mah={300}>
                         {spaces

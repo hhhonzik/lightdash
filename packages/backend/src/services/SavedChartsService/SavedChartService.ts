@@ -13,12 +13,14 @@ import {
     ExploreType,
     ForbiddenError,
     generateSlug,
+    getTimezoneLabel,
     isChartScheduler,
     isConditionalFormattingConfigWithColorRange,
     isConditionalFormattingConfigWithSingleColor,
     isCustomSqlDimension,
     isUserWithOrg,
     isValidFrequency,
+    isValidTimezone,
     ParameterError,
     SavedChart,
     SavedChartDAO,
@@ -31,6 +33,9 @@ import {
     UpdateMultipleSavedChart,
     UpdateSavedChart,
     ViewStatistics,
+    type ChartFieldUpdates,
+    type Explore,
+    type ExploreError,
 } from '@lightdash/common';
 import cronstrue from 'cronstrue';
 import {
@@ -42,6 +47,8 @@ import {
 import { SlackClient } from '../../clients/Slack/SlackClient';
 import { getSchedulerTargetType } from '../../database/entities/scheduler';
 import { AnalyticsModel } from '../../models/AnalyticsModel';
+import type { CatalogModel } from '../../models/CatalogModel/CatalogModel';
+import { getChartFieldUsageChanges } from '../../models/CatalogModel/utils';
 import { DashboardModel } from '../../models/DashboardModel/DashboardModel';
 import { PinnedListModel } from '../../models/PinnedListModel';
 import { ProjectModel } from '../../models/ProjectModel/ProjectModel';
@@ -63,6 +70,7 @@ type SavedChartServiceArguments = {
     schedulerClient: SchedulerClient;
     slackClient: SlackClient;
     dashboardModel: DashboardModel;
+    catalogModel: CatalogModel;
 };
 
 export class SavedChartService extends BaseService {
@@ -86,6 +94,8 @@ export class SavedChartService extends BaseService {
 
     private readonly dashboardModel: DashboardModel;
 
+    private readonly catalogModel: CatalogModel;
+
     constructor(args: SavedChartServiceArguments) {
         super();
         this.analytics = args.analytics;
@@ -98,6 +108,7 @@ export class SavedChartService extends BaseService {
         this.schedulerClient = args.schedulerClient;
         this.slackClient = args.slackClient;
         this.dashboardModel = args.dashboardModel;
+        this.catalogModel = args.catalogModel;
     }
 
     private async checkUpdateAccess(
@@ -305,13 +316,40 @@ export class SavedChartService extends BaseService {
         return eventProperties;
     }
 
+    private async updateChartFieldUsage(
+        projectUuid: string,
+        chartExplore: Explore | ExploreError,
+        chartFields: ChartFieldUpdates,
+    ) {
+        const fieldUsageChanges = await getChartFieldUsageChanges(
+            projectUuid,
+            chartExplore,
+            chartFields,
+            this.catalogModel.findTablesCachedExploreUuid.bind(
+                this.catalogModel,
+            ),
+        );
+
+        await this.catalogModel.updateFieldsChartUsage(
+            projectUuid,
+            fieldUsageChanges,
+        );
+    }
+
     async createVersion(
         user: SessionUser,
         savedChartUuid: string,
         data: CreateSavedChartVersion,
     ): Promise<SavedChart> {
-        const { organizationUuid, projectUuid, spaceUuid } =
-            await this.savedChartModel.getSummary(savedChartUuid);
+        const {
+            organizationUuid,
+            projectUuid,
+            spaceUuid,
+            metricQuery: {
+                metrics: oldChartMetrics,
+                dimensions: oldChartDimensions,
+            },
+        } = await this.savedChartModel.get(savedChartUuid);
 
         const space = await this.spaceModel.getSpaceSummary(spaceUuid);
         const access = await this.spaceModel.getUserSpaceAccess(
@@ -366,6 +404,29 @@ export class SavedChartService extends BaseService {
                 properties,
             });
         });
+
+        try {
+            const cachedExplore = await this.projectModel.getExploreFromCache(
+                projectUuid,
+                savedChart.tableName,
+            );
+
+            await this.updateChartFieldUsage(projectUuid, cachedExplore, {
+                oldChartFields: {
+                    metrics: oldChartMetrics,
+                    dimensions: oldChartDimensions,
+                },
+                newChartFields: {
+                    metrics: data.metricQuery.metrics,
+                    dimensions: data.metricQuery.dimensions,
+                },
+            });
+        } catch (error) {
+            this.logger.error(
+                `Error updating chart field usage for chart ${savedChartUuid}`,
+                error,
+            );
+        }
 
         return {
             ...savedChart,
@@ -567,8 +628,13 @@ export class SavedChartService extends BaseService {
     }
 
     async delete(user: SessionUser, savedChartUuid: string): Promise<void> {
-        const { organizationUuid, projectUuid, spaceUuid } =
-            await this.savedChartModel.getSummary(savedChartUuid);
+        const {
+            organizationUuid,
+            projectUuid,
+            spaceUuid,
+            metricQuery: { metrics, dimensions },
+            tableName,
+        } = await this.savedChartModel.get(savedChartUuid);
         const space = await this.spaceModel.getSpaceSummary(spaceUuid);
         const access = await this.spaceModel.getUserSpaceAccess(
             user.userUuid,
@@ -590,6 +656,30 @@ export class SavedChartService extends BaseService {
         }
 
         const deletedChart = await this.savedChartModel.delete(savedChartUuid);
+
+        try {
+            const cachedExplore = await this.projectModel.getExploreFromCache(
+                projectUuid,
+                tableName,
+            );
+
+            await this.updateChartFieldUsage(projectUuid, cachedExplore, {
+                oldChartFields: {
+                    metrics,
+                    dimensions,
+                },
+                newChartFields: {
+                    metrics: [],
+                    dimensions: [],
+                },
+            });
+        } catch (error) {
+            this.logger.error(
+                `Error updating chart field usage for chart ${savedChartUuid}`,
+                error,
+            );
+        }
+
         this.analytics.track({
             event: 'saved_chart.deleted',
             userId: user.userUuid,
@@ -739,6 +829,7 @@ export class SavedChartService extends BaseService {
             projectUuid,
             savedChart.tableName,
         );
+
         this.analytics.track({
             event: 'saved_chart.created',
             userId: user.userUuid,
@@ -761,6 +852,24 @@ export class SavedChartService extends BaseService {
                 properties,
             });
         });
+
+        try {
+            await this.updateChartFieldUsage(projectUuid, cachedExplore, {
+                oldChartFields: {
+                    metrics: [],
+                    dimensions: [],
+                },
+                newChartFields: {
+                    metrics: newSavedChart.metricQuery.metrics,
+                    dimensions: newSavedChart.metricQuery.dimensions,
+                },
+            });
+        } catch (error) {
+            this.logger.error(
+                `Error updating chart field usage for chart ${newSavedChart.uuid}`,
+                error,
+            );
+        }
 
         return { ...newSavedChart, isPrivate, access };
     }
@@ -852,6 +961,25 @@ export class SavedChartService extends BaseService {
                 duplicateOfSavedQueryId: chartUuid,
             },
         });
+
+        try {
+            await this.updateChartFieldUsage(projectUuid, cachedExplore, {
+                oldChartFields: {
+                    metrics: [],
+                    dimensions: [],
+                },
+                newChartFields: {
+                    metrics: newSavedChart.metricQuery.metrics,
+                    dimensions: newSavedChart.metricQuery.dimensions,
+                },
+            });
+        } catch (error) {
+            this.logger.error(
+                `Error updating chart field usage for chart ${newSavedChart.uuid}`,
+                error,
+            );
+        }
+
         return { ...newSavedChart, isPrivate: space.isPrivate, access };
     }
 
@@ -877,6 +1005,11 @@ export class SavedChartService extends BaseService {
                 'Frequency not allowed, custom input is limited to hourly',
             );
         }
+
+        if (!isValidTimezone(newScheduler.timezone)) {
+            throw new ParameterError('Timezone string is not valid');
+        }
+
         const { projectUuid, organizationUuid } =
             await this.checkCreateScheduledDeliveryAccess(user, chartUuid);
         const scheduler = await this.schedulerModel.createScheduler({
@@ -885,6 +1018,7 @@ export class SavedChartService extends BaseService {
             dashboardUuid: null,
             savedChartUuid: chartUuid,
         });
+
         const createSchedulerEventData: SchedulerUpsertEvent = {
             userId: user.userUuid,
             event: 'scheduler.created',
@@ -908,6 +1042,8 @@ export class SavedChartService extends BaseService {
                     scheduler.format === SchedulerFormat.GSHEETS
                         ? []
                         : scheduler.targets.map(getSchedulerTargetType),
+                timeZone: getTimezoneLabel(scheduler.timezone),
+                includeLinks: scheduler.includeLinks,
             },
         };
         this.analytics.track(createSchedulerEventData);
@@ -1022,11 +1158,12 @@ export class SavedChartService extends BaseService {
         versionUuid: string,
     ): Promise<void> {
         await this.checkUpdateAccess(user, chartUuid);
+        const currentChartVersion = await this.savedChartModel.get(chartUuid);
         const chartVersion = await this.savedChartModel.get(
             chartUuid,
             versionUuid,
         );
-        const savedChart = await this.savedChartModel.createVersion(
+        const newChartVersion = await this.savedChartModel.createVersion(
             chartUuid,
             chartVersion,
             user,
@@ -1035,15 +1172,43 @@ export class SavedChartService extends BaseService {
             event: 'saved_chart_version.rollback',
             userId: user.userUuid,
             properties: {
-                projectId: savedChart.projectUuid,
-                savedQueryId: savedChart.uuid,
+                projectId: newChartVersion.projectUuid,
+                savedQueryId: newChartVersion.uuid,
                 versionId: versionUuid,
             },
         });
         this.analytics.track({
             event: 'saved_chart_version.created',
             userId: user.userUuid,
-            properties: SavedChartService.getCreateEventProperties(savedChart),
+            properties:
+                SavedChartService.getCreateEventProperties(newChartVersion),
         });
+
+        try {
+            const cachedExplore = await this.projectModel.getExploreFromCache(
+                newChartVersion.projectUuid,
+                newChartVersion.tableName,
+            );
+
+            await this.updateChartFieldUsage(
+                newChartVersion.projectUuid,
+                cachedExplore,
+                {
+                    oldChartFields: {
+                        metrics: currentChartVersion.metricQuery.metrics,
+                        dimensions: currentChartVersion.metricQuery.dimensions,
+                    },
+                    newChartFields: {
+                        metrics: newChartVersion.metricQuery.metrics,
+                        dimensions: newChartVersion.metricQuery.dimensions,
+                    },
+                },
+            );
+        } catch (error) {
+            this.logger.error(
+                `Error updating chart field usage for chart ${newChartVersion.uuid}`,
+                error,
+            );
+        }
     }
 }
