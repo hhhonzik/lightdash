@@ -145,7 +145,7 @@ RUN pnpm -F @lightdash/warehouses build
 # Build cli
 COPY packages/cli/tsconfig.json ./packages/cli/
 COPY packages/cli/src/ ./packages/cli/src/
-RUN yarn --cwd ./packages/cli/ build
+RUN pnpm -F @lightdash/cli build
 
 # Build backend
 COPY packages/backend/tsconfig.json ./packages/backend/
