@@ -141,6 +141,17 @@ function getMockCredentials(
                 http_scheme: '',
             };
             break;
+        case SupportedDbtAdapter.STARROCKS:
+            credentials = {
+                type: WarehouseTypes.STARROCKS,
+                host: '',
+                schema: '',
+                user: '',
+                catalog: '',
+                password: '',
+                port: 9030,
+            };
+            break;
         default:
             assertUnreachable(
                 dbtAdaptorType,
